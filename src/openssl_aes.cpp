@@ -26,12 +26,33 @@
 #include <zlib.h>
 
 //-----------------------------------------------------------------------------
-OpenSSL_AES::OpenSSL_AES(std::string password, unsigned long long salt, bool use_compression) :
-    _use_compression(use_compression)
+OpenSSL_AES::OpenSSL_AES()
 {
+}
+
+//-----------------------------------------------------------------------------
+OpenSSL_AES::~OpenSSL_AES()
+{
+    deinit();
+}
+
+//-----------------------------------------------------------------------------
+void
+OpenSSL_AES::init(std::string password, unsigned long long salt, bool use_compression)
+{
+    _use_compression = use_compression;
+
+    if (_initialized && _password == password && _salt == salt) {
+        return;
+    }
+
+    _password = password;
+    _salt = salt;
+
+    deinit();
+
     int n_rounds = 5;
     unsigned char key[32], iv[32];
-
     /*
      * Gen key & IV for AES 256 CBC mode. A SHA1 digest is used to hash the supplied key material.
      * n_rounds is the number of times the we hash the material. More rounds are more secure but
@@ -57,11 +78,16 @@ OpenSSL_AES::OpenSSL_AES(std::string password, unsigned long long salt, bool use
     EVP_CIPHER_CTX_init(&dec_cipher_context);
     EVP_DecryptInit_ex(&dec_cipher_context, EVP_aes_256_cbc(), nullptr, key, iv);
 #endif
+    _initialized = true;
 }
 
 //-----------------------------------------------------------------------------
-OpenSSL_AES::~OpenSSL_AES()
+void
+OpenSSL_AES::deinit()
 {
+    if (!_initialized) {
+        return;
+    }
 #if OPENSSL_VERSION_NUMBER >= 0x1010000fL
     EVP_CIPHER_CTX_free(enc_cipher_context);
     EVP_CIPHER_CTX_free(dec_cipher_context);
@@ -69,6 +95,7 @@ OpenSSL_AES::~OpenSSL_AES()
     EVP_CIPHER_CTX_cleanup(&enc_cipher_context);
     EVP_CIPHER_CTX_cleanup(&dec_cipher_context);
 #endif
+    _initialized = false;
 }
 
 //-----------------------------------------------------------------------------
@@ -77,6 +104,9 @@ OpenSSL_AES::encrypt(std::string plain_text)
 {
     unsigned long source_len = static_cast<unsigned long>(plain_text.length() + 1);
     unsigned long dest_len = source_len * 2;
+    if (dest_len < source_len + 12) {
+        dest_len = source_len + 12;
+    }
     std::unique_ptr<unsigned char[]> compressed(new unsigned char[dest_len]);
     if (_use_compression) {
         int err = compress2(compressed.get(), &dest_len,

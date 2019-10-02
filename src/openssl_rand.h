@@ -1,4 +1,4 @@
-/***************************************************************************
+/*************************************************************************
 *
 * AUTERION CONFIDENTIAL
 * __________________
@@ -19,18 +19,9 @@
 #pragma once
 
 #include <string>
-#include <vector>
 
-std::string timestamp();
-
-std::string exec(const char* cmd);
-
-bool iequals(const std::string& str1, const std::string& str2);
-
-std::vector<std::string> split(std::string str, char delimiter);
-
-std::vector<std::string> scan_ifaces();
-
-bool atoi(char* a, int& val);
-
-std::string to_upper(std::string str);
+class OpenSSL_Rand
+{
+public:
+    static std::string random_string(uint length);
+};

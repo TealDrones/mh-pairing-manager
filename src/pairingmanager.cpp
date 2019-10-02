@@ -26,6 +26,7 @@
 #include <iostream>
 #include <served/served.hpp>
 
+#include "openssl_rand.h"
 #include "pairingmanager.h"
 #include "util.h"
 
@@ -33,20 +34,27 @@ using namespace std::chrono_literals;
 
 const int random_aes_key_length = 8;
 const int microhard_settings_port = 23;
-const char* json_filename = "/tmp/pairing.json";
-const char* json_gcs_filename = "/data/pairing.json";
+const char* json_filename = "temp_pairing.json";
+const char* json_gcs_filename = "pairing.json";
 const char* pipe_path = "/tmp/mavlink_router_pipe";
 
 //-----------------------------------------------------------------------------
 PairingManager::PairingManager() :
-    _aes("J6+KuWh9K2!hG(F'", 0x368de30e8ec063ce)
+    _aes()
 {
+    _last_pairing_time_stamp = std::chrono::steady_clock::now();
 }
 
 //-----------------------------------------------------------------------------
 bool
 PairingManager::init()
 {
+    if (access(persistent_folder.c_str(), 0) != 0) {
+        std::cout << "Persistent directory " << persistent_folder << " does not exist. Using current working directory." << std::endl;
+        persistent_folder = "./";
+    }
+
+    _aes.init(pairing_encryption_key);
     _create_pairing_json();
 
     std::thread([this]() {
@@ -68,8 +76,10 @@ PairingManager::_configure_microhard(
     const std::string& air_ip,
     const std::string& config_pwd,
     const std::string& encryption_key,
+    const std::string& network_id,
     const std::string& channel,
-    bool low_power)
+    const std::string& bandwidth,
+    const std::string& power)
 {
     std::lock_guard<std::mutex> guard(_mh_mutex);
     bool connected = false;
@@ -112,6 +122,7 @@ PairingManager::_configure_microhard(
                 char buffer[1024];
                 int state = 0;
                 std::string output;
+                std::string logbuf;
                 std::string cmd;
 
                 auto start_time = std::chrono::steady_clock::now();
@@ -129,8 +140,16 @@ PairingManager::_configure_microhard(
                     }
                     buffer[n] = 0;
                     output += buffer;
-                    std::cout << timestamp() << "MH: " << buffer << std::endl;
-
+                    logbuf += buffer;
+#ifdef UNSECURE_DEBUG
+                    size_t i = logbuf.find('\n');
+                    while (i != std::string::npos) {
+                        std::string s = logbuf.substr(0, i);
+                        std::cout << timestamp() << "MH: " << s << std::endl;
+                        logbuf = (i + 1 > logbuf.length()) ? "" : logbuf.substr(i + 1);
+                        i = logbuf.find('\n');
+                    }
+#endif
                     if (state == 0 && output.find("login:") != std::string::npos) {
                         state = 1;
                         cmd = "admin\n";
@@ -148,28 +167,38 @@ PairingManager::_configure_microhard(
                         send(sock, cmd.c_str(), cmd.length(), 0);
                         output = "";
                         state = 3;
-                    } else if (state == 3 && output.find("OK") != std::string::npos) {
-                        if (low_power) {
-                            cmd = "AT+MWTXPOWER=7\n";
-                        } else {
-                            cmd = "AT+MWTXPOWER=30\n";
-                        }
+                    } else if (state == 3 && _check_at_result(output)) {
+                        cmd = "AT+MWTXPOWER=" + power + "\n";
                         send(sock, cmd.c_str(), cmd.length(), 0);
                         output = "";
                         state = 4;
-                    } else if (state == 4 && output.find("OK") != std::string::npos) {
+                    } else if (state == 4 && _check_at_result(output)) {
                         cmd = "AT+MWFREQ=" + channel + "\n";
                         send(sock, cmd.c_str(), cmd.length(), 0);
                         output = "";
                         std::cout << timestamp() << "Set Microhard channel: " << channel << std::endl;
                         state = 5;
-                        // We continue even if frequency set ended with error
-                    } else if (state == 5 && (output.find("OK") != std::string::npos || output.find("ERROR:") != std::string::npos)) {
+                    } else if (state == 5 && _check_at_result(output)) {
+                        cmd = "AT+MWBAND=" + bandwidth + "\n";
+                        send(sock, cmd.c_str(), cmd.length(), 0);
+                        output = "";
+                        std::cout << timestamp() << "Set Microhard bandwidth: " << bandwidth << std::endl;
+                        state = 6;
+                    } else if (state == 6 && _check_at_result(output)) {
+                        cmd = "AT+MWNETWORKID=" + network_id + "\n";
+                        send(sock, cmd.c_str(), cmd.length(), 0);
+                        output = "";
+                        std::cout << timestamp() << "Set Microhard network Id: " << network_id << std::endl;
+                        state = 7;
+                    } else if (state == 7 && _check_at_result(output)) {
                         cmd = std::string("AT&W\n");
                         send(sock, cmd.c_str(), cmd.length(), 0);
                         std::this_thread::sleep_for(500ms);
-    //                    std::cout << timestamp() << "Set Microhard encryption key." << std::endl;
+#ifdef UNSECURE_DEBUG
                         std::cout << timestamp() << "Set Microhard encryption key: " << encryption_key << std::endl;
+#else                      
+                        std::cout << timestamp() << "Set Microhard encryption key." << std::endl;
+#endif                    
                         done = true;
                         break;
                     }
@@ -187,41 +216,20 @@ PairingManager::_configure_microhard(
 }
 
 //-----------------------------------------------------------------------------
-void
-PairingManager::_reconfigure_microhard()
+bool
+PairingManager::_check_at_result(const std::string& output)
 {
-    _configure_microhard(_pairing_val["AIP"].asString(), _pairing_val["CP"].asString(), _pairing_val["EK"].asString(), pairing_channel);
+    return (output.find("OK") != std::string::npos || output.find("ERROR:") != std::string::npos);
 }
 
 //-----------------------------------------------------------------------------
 void
-PairingManager::_get_connection_info(Json::Value& val_)
+PairingManager::_reconfigure_microhard()
 {
-    std::ifstream in(json_gcs_filename);
-    if (!in) {
-        val_["EK"] = random_string(random_aes_key_length);
-        val_["CC"] = pairing_channel;
-        return;
-    }
-    std::stringstream ss;
-    ss << _aes.decrypt(std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()));
-
-    Json::Value val;
-    Json::CharReaderBuilder jsonReader;
-    std::string errs;
-
-    if (!Json::parseFromStream(jsonReader, ss, &val, &errs)) {
-        val_["EK"] = random_string(random_aes_key_length);
-        val_["CC"] = pairing_channel;
-        return;
-    }
-
-    _rsa.generate_public(val["DevPublicKey"].asString());
-    _rsa.generate_private(val["DevPrivateKey"].asString());
-    _gcs_rsa.generate_public(val["PublicKey"].asString());
-
-    val_["EK"] = val["EK"];
-    val_["CC"] = val["CC"];
+    _configure_microhard(_pairing_val["AIP"].asString(), _pairing_val["CP"].asString(),
+                         _pairing_val["EK"].asString(), pairing_network_id,
+                         pairing_channel, _pairing_val["BW"].asString(),
+                         default_transmit_power);
 }
 
 //-----------------------------------------------------------------------------
@@ -256,9 +264,43 @@ PairingManager::_create_pairing_json_for_microhard(Json::Value& val)
 
     val["AIP"] = air_unit_ip;
     val["CP"] = config_password;
-    _get_connection_info(val);
+    val["BW"] = default_pairing_bandwidth;
+    val["PW"] = default_transmit_power;
 
-    _configure_microhard(val["AIP"].asString(), val["CP"].asString(), val["EK"].asString(), val["CC"].asString());
+    bool error = true;
+    std::ifstream in(_get_json_gcs_filename());
+    if (in) {
+        std::stringstream ss;
+        Json::Value val_;
+        Json::CharReaderBuilder jsonReader;
+        std::string errs;
+
+        ss << _aes.decrypt(std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()));
+        if (Json::parseFromStream(jsonReader, ss, &val_, &errs)) {
+            _rsa.generate_public(val_["DevPublicKey"].asString());
+            _rsa.generate_private(val_["DevPrivateKey"].asString());
+            _gcs_rsa.generate_public(val_["PublicKey"].asString());
+
+            val["EK"] = val_["EK"];
+            val["CC"] = val_["CC"];
+            val["NID"] = val_["NID"];
+            val["PW"] = val_["PW"];
+            val["BW"] = val_["BW"];
+
+            error = false;
+        }
+    }
+
+    if (error) {
+        val["EK"] = OpenSSL_Rand::random_string(random_aes_key_length);
+        val["CC"] = pairing_channel;
+        val["NID"] = pairing_network_id;
+        val["PW"] = default_transmit_power;
+    }
+
+    _configure_microhard(val["AIP"].asString(), val["CP"].asString(), val["EK"].asString(),
+                         val["NID"].asString(),
+                         val["CC"].asString(), val["BW"].asString(), val["PW"].asString());
 }
 
 //-----------------------------------------------------------------------------
@@ -287,7 +329,9 @@ PairingManager::get_pairing_json()
         _create_pairing_json_for_taisync(_pairing_val);
     }
     Json::StreamWriterBuilder builder;
+#ifdef UNSECURE_DEBUG
     std::cout << timestamp() << Json::writeString(builder, _pairing_val) << std::endl;
+#endif    
 
     builder["commentStyle"] = "None";
     builder["indentation"] = "";
@@ -317,7 +361,9 @@ PairingManager::_create_pairing_json()
 
 //-----------------------------------------------------------------------------
 bool
-PairingManager::_create_gcs_pairing_json(const std::string& s, std::string& connect_key, std::string& channel)
+PairingManager::_create_gcs_pairing_json(const std::string& s, std::string& connect_key,
+                                         std::string& channel, std::string& bandwidth, 
+                                         std::string& network_id)
 {
     std::stringstream ss1;
     ss1 << _aes.decrypt(s);
@@ -333,6 +379,9 @@ PairingManager::_create_gcs_pairing_json(const std::string& s, std::string& conn
 
     connect_key = val["EK"].asString();
     channel = val["CC"].asString();
+    bandwidth = val["BW"].asString();
+    network_id = val["NID"].asString();
+    val["PW"] = default_transmit_power;
 
     _gcs_rsa.generate_public(val["PublicKey"].asString());
     _rsa.generate();
@@ -349,7 +398,6 @@ PairingManager::_refresh_udp_endpoint()
     int fd = open(pipe_path, O_RDWR);
     if (fd < 0) {
         std::cout << timestamp() << "Failed to open pipe: " << pipe_path << std::endl;
-        _reconfigure_microhard();
         return;
     }
 
@@ -397,62 +445,272 @@ PairingManager::_open_udp_endpoint(const std::string& ip, const std::string& por
 std::string
 PairingManager::pair_gcs(const std::string& req_body)
 {
-    std::string result;
     std::string connect_key;
     std::string channel;
+    std::string bandwidth;
+    std::string network_id;
+    Json::Value val;
+    val["CMD"] = "pair";
+    val["NM"] = machine_name;
 
-    if (_create_gcs_pairing_json(req_body, connect_key, channel) && connect_key != "" && channel != "") {
-        std::cout << timestamp()<< "Got connect key: " << connect_key << " and channel: " << channel << std::endl;
+    if (_create_gcs_pairing_json(req_body, connect_key, channel, bandwidth, network_id) &&
+         connect_key != "" && channel != "" && network_id != "") {
+        std::cout << timestamp()
+            << "Got connect key"
+#ifdef UNSECURE_DEBUG
+            << ": " << connect_key
+#endif            
+            << " and channel: " << channel
+            << " and bandwidth: " << bandwidth
+            << " and network id: " << network_id
+            << std::endl;
         std::lock_guard<std::mutex> guard(_pairing_mutex);
         _pairing_mode = false;
-        _configure_microhard(_pairing_val["AIP"].asString(), _pairing_val["CP"].asString(), connect_key, channel);
-        result = "Accepted;" + machine_name + ";" + _rsa.get_public_key();
+        _configure_microhard(_pairing_val["AIP"].asString(), _pairing_val["CP"].asString(),
+                              connect_key, network_id,
+                              channel, bandwidth, default_transmit_power);
+        val["CC"] = channel;
+        val["NID"] = network_id;
+        val["RES"] = "accepted";
+        val["PublicKey"] = _rsa.get_public_key();
     } else {
         std::cout << timestamp() << "Did not get the connect key" << std::endl;
-        result = "Rejected";
+        val["RES"] = "rejected";
     }
+    std::string message = _pack_response(val);
 
-    return _aes.encrypt(result);
+    return _aes.encrypt(message);
 }
 
 //-----------------------------------------------------------------------------
-void
-PairingManager::unpair_gcs()
+bool
+PairingManager::_verify_request(const std::string& req_body, Json::Value& val)
+{
+    auto a = split(_rsa.decrypt(req_body), ';');
+    if (a.size() < 2 || !_gcs_rsa.verify(a[0], a[1])) {
+        return false;
+    }
+    std::stringstream ss;
+    ss << a[0];
+
+    Json::CharReaderBuilder jsonReader;
+    std::string errs;
+
+    if (!Json::parseFromStream(jsonReader, ss, &val, &errs)) {
+        return false;
+    }
+
+    return true;
+}
+
+//-----------------------------------------------------------------------------
+std::string
+PairingManager::_pack_response(Json::Value& response)
+{
+    Json::StreamWriterBuilder builder;
+#ifdef UNSECURE_DEBUG
+    std::cout << timestamp() << "Response Json:" << std::endl;
+    std::cout << timestamp() << Json::writeString(builder, response) << std::endl;
+#endif
+    builder["commentStyle"] = "None";
+    builder["indentation"] = "";
+    std::stringstream ss;
+    ss << Json::writeString(builder, response);
+
+    return ss.str();
+}
+
+//-----------------------------------------------------------------------------
+std::string
+PairingManager::unpair_gcs(const std::string& req_body)
 {
     std::cout << timestamp() << "Got unpair request" << std::endl;
+
+    Json::Value val;
+    val["CMD"] = "unpair";
+    val["NM"] = machine_name;
+    if (_unpair_gcs(req_body)) {
+        val["RES"] = "accepted";
+    } else {
+        val["RES"] = "rejected";
+    }
+    std::string message = _pack_response(val);
+
+    return _gcs_rsa.encrypt(message + ";" + _rsa.sign(message));
+}
+
+//-----------------------------------------------------------------------------
+bool
+PairingManager::_unpair_gcs(const std::string& req_body)
+{
+    Json::Value val;
+    if (!_verify_request(req_body, val)) {
+        std::cout << timestamp() << "Unpair request verification failed" << std::endl;
+        return false;
+    }
+    std::cout << timestamp() << "Unpair request verification succeeded. " << std::endl;
+#ifdef UNSECURE_DEBUG
+    std::cout << timestamp() << "Unpair Json:" << std::endl;
+    Json::StreamWriterBuilder builder;
+    std::cout << timestamp() << Json::writeString(builder, val) << std::endl;
+#endif
     std::lock_guard<std::mutex> udp_guard(_udp_mutex);
     _ip = "";
     _port = "";
     _remove_endpoint("gcs");
-    remove(json_gcs_filename);
+    remove(_get_json_gcs_filename().c_str());
 
     std::lock_guard<std::mutex> pairing_guard(_pairing_mutex);
     if (!_pairing_mode) {
-        _pairing_val["EK"] = random_string(random_aes_key_length);
+        _pairing_val["EK"] = OpenSSL_Rand::random_string(random_aes_key_length);
         _reconfigure_microhard();
     }
+
+    return true;
+}
+
+//-----------------------------------------------------------------------------
+std::string
+PairingManager::connect_gcs(const std::string& req_body)
+{
+    std::cout << timestamp() << "Got connect request" << std::endl;
+
+    Json::Value val;
+    val["CMD"] = "connect";
+    val["NM"] = machine_name;
+    std::string channel;
+    if (_connect_gcs(req_body, channel)) {
+        val["RES"] = "accepted";
+        val["CC"] = channel;
+    } else {
+        val["RES"] = "rejected";
+    }
+    std::string message = _pack_response(val);
+
+    return _gcs_rsa.encrypt(message + ";" + _rsa.sign(message));
+}
+
+//-----------------------------------------------------------------------------
+bool
+PairingManager::_connect_gcs(const std::string& req_body, std::string& channel)
+{
+    Json::Value val;
+    if (!_verify_request(req_body, val)) {
+        std::cout << timestamp() << "Connection request verification failed" << std::endl;
+        return false;
+    }
+    std::cout << timestamp() << "Connection request verification succeeded. " << std::endl;
+#ifdef UNSECURE_DEBUG
+    std::cout << timestamp() << "Connect Json:" << std::endl;
+    Json::StreamWriterBuilder builder;
+    std::cout << timestamp() << Json::writeString(builder, val) << std::endl;
+#endif
+    if (!_set_channel(val["NID"].asString(), val["CC"].asString(), val["PW"].asString(), val["BW"].asString())) {
+        std::cout << timestamp() << "Set channel failed!" << std::endl;
+        return false;
+    }
+
+    channel = val["CC"].asString();
+    std::string ip = val["IP"].asString();
+    std::string port = val["P"].asString();
+    if (!ip.empty() && !port.empty()) {
+        std::cout << timestamp() << "Creating UDP endpoint " << ip << ":" << port << std::endl;
+        _open_udp_endpoint(ip, port);
+    }
+
+    return true;
+}
+
+//-----------------------------------------------------------------------------
+std::string
+PairingManager::disconnect_gcs(const std::string& req_body)
+{
+    std::cout << timestamp() << "Got disconnect request" << std::endl;
+
+    Json::Value val;
+    val["CMD"] = "disconnect";
+    val["NM"] = machine_name;
+    if (_disconnect_gcs(req_body)) {
+        val["RES"] = "accepted";
+    } else {
+        val["RES"] = "rejected";
+    }
+    std::string message = _pack_response(val);
+
+    return _gcs_rsa.encrypt(message + ";" + _rsa.sign(message));
+}
+
+//-----------------------------------------------------------------------------
+bool
+PairingManager::_disconnect_gcs(const std::string& req_body)
+{
+    Json::Value val;
+    if (!_verify_request(req_body, val)) {
+        std::cout << timestamp() << "Disconnect request verification failed" << std::endl;
+        return false;
+    }
+    std::cout << timestamp() << "Disconnect request verification succeeded. " << std::endl;
+#ifdef UNSECURE_DEBUG
+    std::cout << timestamp() << "Disconnect Json:" << std::endl;
+    Json::StreamWriterBuilder builder;
+    std::cout << timestamp() << Json::writeString(builder, val) << std::endl;
+#endif
+    if (!_set_channel(val["NID"].asString(), val["CC"].asString(), val["PW"].asString(), val["BW"].asString())) {
+        std::cout << timestamp() << "Set channel failed!" << std::endl;
+        return false;
+    }
+
+    _remove_endpoint("gcs");
+
+    return true;
 }
 
 //-----------------------------------------------------------------------------
 std::string
 PairingManager::set_channel(const std::string& req_body)
 {
-    std::string result;
     std::cout << timestamp() << "Got set channel request: " << req_body << std::endl;
-    if (_set_channel(req_body)) {
-        result = "Channel;Accepted";
-    } else {
-        result = "Channel;Rejected";
-    }
 
-    return _aes.encrypt(result);
+    Json::Value val;
+    if (_set_channel(req_body, val)) {
+        val["RES"] = "accepted";
+    } else {
+        val["RES"] = "rejected";
+    }
+    val["CMD"] = "channel";
+    val["NM"] = machine_name;
+    std::string message = _pack_response(val);
+
+    return _gcs_rsa.encrypt(message + ";" + _rsa.sign(message));
 }
 
 //-----------------------------------------------------------------------------
 bool
-PairingManager::_set_channel(const std::string& req_body)
+PairingManager::_set_channel(const std::string& req_body, Json::Value& val)
 {
-    std::string new_ch = req_body;
+    if (!_verify_request(req_body, val)) {
+        std::cout << timestamp() << "Set channel request verification failed" << std::endl;
+        return false;
+    }
+    std::cout << timestamp() << "Set channel verification succeeded. " << std::endl;
+#ifdef UNSECURE_DEBUG
+    std::cout << timestamp() << "Set channel Json:" << std::endl;
+    Json::StreamWriterBuilder builder;
+    std::cout << timestamp() << Json::writeString(builder, val) << std::endl;
+#endif
+    if (!_set_channel(val["NID"].asString(), val["CC"].asString(), val["PW"].asString(), val["BW"].asString())) {
+        std::cout << timestamp() << "Set channel failed!" << std::endl;
+        return false;
+    }
+
+    return true;
+}
+
+//-----------------------------------------------------------------------------
+bool
+PairingManager::_set_channel(const std::string& new_network_id, const std::string& new_ch,
+                             const std::string& power, const std::string& new_bandwidth)
+{
     try {
         int ch = std::stoi(new_ch);
         if (ch < 1 || ch > 81) {
@@ -462,7 +720,7 @@ PairingManager::_set_channel(const std::string& req_body)
         return false;
     }
 
-    std::ifstream in(json_gcs_filename);
+    std::ifstream in(_get_json_gcs_filename());
     if (!in) {
         return false;
     }
@@ -477,16 +735,18 @@ PairingManager::_set_channel(const std::string& req_body)
         return false;
     }
     val["CC"] = new_ch;
+    val["PW"] = power;
     std::string connect_key = val["EK"].asString();
 
     if (!_write_json_gcs_file(val)) {
         return false;
     }
 
-    std::thread([this, connect_key, new_ch]() {
+    std::thread([this, connect_key, new_network_id, new_ch, new_bandwidth, power]() {
         std::this_thread::sleep_for(100ms);
-        std::cout << "Setting channel: " << new_ch << std::endl;
-        _configure_microhard(_pairing_val["AIP"].asString(), _pairing_val["CP"].asString(), connect_key, new_ch);
+        std::cout << "Setting channel: " << new_ch << " Power: " << power << " Network ID: " << new_network_id << std::endl;
+        _configure_microhard(_pairing_val["AIP"].asString(), _pairing_val["CP"].asString(),
+                             connect_key, new_network_id, new_ch, new_bandwidth, power);
     }).detach();
 
     return true;
@@ -496,83 +756,33 @@ PairingManager::_set_channel(const std::string& req_body)
 bool
 PairingManager::_write_json_gcs_file(Json::Value& val)
 {
-    std::cout << timestamp() << "Wwrite Json GCS file:" << std::endl;
+    std::cout << timestamp() << "Write Json GCS file:" << std::endl;
     Json::StreamWriterBuilder builder;
+#ifdef UNSECURE_DEBUG    
     std::cout << timestamp() << Json::writeString(builder, val) << std::endl;
+#endif    
     builder["commentStyle"] = "None";
     builder["indentation"] = "";
 
     std::stringstream ss;
     ss << Json::writeString(builder, val);
     std::string modified_s = _aes.encrypt(ss.str());
+    std::string json_gcs_filename = _get_json_gcs_filename();
     std::ofstream out(json_gcs_filename);
     if (!out) {
-        std::cout << timestamp() << "Failed to open " << json_filename << " for writing" << std::endl;
+        std::cout << timestamp() << "Failed to open " << json_gcs_filename << " for writing" << std::endl;
         return false;
     }
     out << modified_s;
 
     bool res = true;
     if (out.bad()) {
-        std::cout << timestamp() << "Failed to write to file " << json_filename << std::endl;
+        std::cout << timestamp() << "Failed to write to file " << json_gcs_filename << std::endl;
         res = false;
     }
     out.close();
 
     return res;
-}
-
-//-----------------------------------------------------------------------------
-std::string
-PairingManager::connect_gcs(const std::string& req_body)
-{
-    std::string result;
-    std::cout << timestamp() << "Got connect request: " << req_body << std::endl;
-    if (_connect_gcs(req_body)) {
-        std::string message = machine_name;
-        result = "Connected;" + _gcs_rsa.encrypt(message + ";" + _rsa.sign(message));
-    } else {
-        result = "Connection;Rejected";
-    }
-
-    return _aes.encrypt(result);
-}
-
-//-----------------------------------------------------------------------------
-bool
-PairingManager::_connect_gcs(const std::string& data)
-{
-    auto a = split(_rsa.decrypt(data), ';');
-    if (a.size() < 2 || !_gcs_rsa.verify(a[0], a[1])) {
-        std::cout << "Connection verification failed" << std::endl;
-        return false;
-    }
-    std::cout << "Connection verification succeeded" << std::endl;
-
-    std::stringstream ss;
-    ss << _aes.decrypt(a[0]);
-
-    Json::Value val;
-    Json::CharReaderBuilder jsonReader;
-    std::string errs;
-
-    if (!Json::parseFromStream(jsonReader, ss, &val, &errs)) {
-        std::cout << timestamp() << "Failed to parse" << errs << std::endl;
-        return {};
-    }
-
-    std::cout << timestamp() << "Connect Json:" << std::endl;
-    Json::StreamWriterBuilder builder;
-    std::cout << timestamp() << Json::writeString(builder, val) << std::endl;
-
-    std::string ip = val["IP"].asString();
-    std::string port = val["P"].asString();
-    if (!ip.empty() && !port.empty()) {
-        std::cout << timestamp() << "Creating UDP endpoint " << ip << ":" << port << std::endl;
-        _open_udp_endpoint(ip, port);
-    }
-
-    return true;
 }
 
 //-----------------------------------------------------------------------------
@@ -582,15 +792,26 @@ PairingManager::handlePairingCommand()
     std::cout << timestamp() << "Got pairing command" << std::endl;
     bool result = false;
     _pairing_mutex.lock();
-    if (!_pairing_mode) {
+    auto now = std::chrono::steady_clock::now();
+
+    if (!_pairing_mode ||
+        std::chrono::duration_cast<std::chrono::milliseconds>(now - _last_pairing_time_stamp).count() > 3000) {
+
         _pairing_mode = true;
+        _last_pairing_time_stamp = now;
         _pairing_mutex.unlock();
         if (_pairing_val["LT"] == "MH") {
             std::lock_guard<std::mutex> udp_guard(_udp_mutex);
             _ip = "";
             _port = "";
             _remove_endpoint("gcs");
-            _configure_microhard(_pairing_val["AIP"].asString(), _pairing_val["CP"].asString(), pairing_encryption_key, pairing_channel, true);
+            _configure_microhard(_pairing_val["AIP"].asString(),
+                                 _pairing_val["CP"].asString(),
+                                 pairing_encryption_key,
+                                 pairing_network_id,
+                                 pairing_channel,
+                                 default_pairing_bandwidth,
+                                 default_transmit_power);
             result = true;
         }
     } else {
@@ -599,3 +820,12 @@ PairingManager::handlePairingCommand()
 
     return result;
 }
+
+//-----------------------------------------------------------------------------
+std::string
+PairingManager::_get_json_gcs_filename()
+{
+    return persistent_folder + json_gcs_filename;
+};
+
+//-----------------------------------------------------------------------------

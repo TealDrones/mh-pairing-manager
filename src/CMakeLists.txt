@@ -31,6 +31,7 @@ add_definitions(
     -Wextra
     -Wno-unused-parameter
     -DCARDEMU_SUPPORT
+    -DUNSECURE_DEBUG
 )
 
 file(GLOB CPP_SRC_FILES
@@ -42,6 +43,7 @@ file(GLOB CPP_SRC_FILES
     openssl_aes.cpp
     openssl_base64.cpp
     openssl_rsa.cpp
+    openssl_rand.cpp
     mavlinkhandler.cpp
 )
 

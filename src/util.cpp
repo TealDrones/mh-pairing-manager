@@ -137,25 +137,6 @@ scan_ifaces()
 }
 
 //-----------------------------------------------------------------------------
-std::string 
-random_string(uint length)
-{
-    srand(time(nullptr));
-    auto randchar = []() -> char
-    {
-        const char charset[] =
-            "0123456789"
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-            "abcdefghijklmnopqrstuvwxyz";
-        const uint max_index = (sizeof(charset) - 1);
-        return charset[rand() % max_index];
-    };
-    std::string str(length, 0);
-    std::generate_n(str.begin(), length, randchar);
-    return str;
-}
-
-//-----------------------------------------------------------------------------
 bool atoi(char *a, int& val)
 {
     char *end;
@@ -166,3 +147,13 @@ bool atoi(char *a, int& val)
     val = static_cast<int>(v);
     return true;
 }
+
+//-----------------------------------------------------------------------------
+std::string to_upper(std::string str)
+{
+    std::transform(str.begin(), str.end(), str.begin(), ::toupper);
+
+    return str;
+}
+
+//-----------------------------------------------------------------------------

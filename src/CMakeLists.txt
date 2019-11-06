@@ -16,11 +16,12 @@
 # from Auterion AG.
 ############################################################################
 
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
 find_package(PkgConfig REQUIRED)
+find_package(GTest REQUIRED)
 
 project(pairing-manager)
 
@@ -35,7 +36,6 @@ add_definitions(
 )
 
 file(GLOB CPP_SRC_FILES
-    main.cpp
     pairingmanager.cpp
     crc32.cpp
     util.cpp
@@ -45,16 +45,13 @@ file(GLOB CPP_SRC_FILES
     openssl_rsa.cpp
     openssl_rand.cpp
     mavlinkhandler.cpp
+    helper.cpp
 )
 
-set_source_files_properties(
-    ${CPP_SRC_FILES}
-    PROPERTIES
-    LANGUAGE CXX
-)
+add_library(pairing-manager-lib  "${CPP_SRC_FILES}" "${C_SRC_FILES}")
 
 add_executable(${PROJECT_NAME}
-    ${CPP_SRC_FILES}
+    main.cpp
 )
 
 include_directories(
@@ -69,15 +66,27 @@ link_directories(
 target_compile_options(${PROJECT_NAME} PUBLIC
 )
 
-target_include_directories(${PROJECT_NAME} PUBLIC
-    ${PROJECT_SOURCE_DIR}/../served/src
+include_directories(
+  ${PROJECT_SOURCE_DIR}/../served/src
+  )
+
+target_link_libraries(${PROJECT_NAME}
+  PUBLIC
+    pairing-manager-lib
 )
 
-target_link_libraries(pairing-manager
-    pthread
-    served
-    udev
-    rt
-    z
-    crypto
+target_link_libraries(pairing-manager-lib
+  pthread
+  served
+  udev
+  rt
+  z
+  crypto
 )
+
+set(SRCS_TEST
+	helper_test.cpp
+)
+add_executable(PAIRING_MANAGER_GTESTS ${SRCS_TEST})
+target_link_libraries(PAIRING_MANAGER_GTESTS ${GTEST_MAIN_LIBRARIES} ${GTEST_LIBRARIES} pairing-manager-lib)
+add_test(NAME PAIRING_MANAGER_GTESTS COMMAND PAIRING_MANAGER_GTESTS)

@@ -62,7 +62,7 @@ help_argv_description(const char* pgm)
 }
 
 void
-parse_argv(int argc, char *argv[], PairingManager& pairing_manager)
+parse_argv(int argc, char * const argv[], PairingManager& pairing_manager)
 {
     static const struct option options[] =
         {
@@ -98,10 +98,10 @@ parse_argv(int argc, char *argv[], PairingManager& pairing_manager)
             pairing_manager.link_type = optarg;
             break;
         case 'i':
-            pairing_manager.air_unit_ip = optarg;
+            pairing_manager.ip_prefix = optarg;
             break;
         case 'a':
-            pairing_manager.ip_prefix = optarg;
+            pairing_manager.air_unit_ip = optarg;
             break;
         case 'c':
             pairing_manager.config_password = optarg;

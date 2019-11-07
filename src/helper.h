@@ -25,5 +25,5 @@
 #include "util.h"
 
 void help_argv_description(const char* pgm);
-void parse_argv(int argc, char *argv[], PairingManager& pairing_manager);
+void parse_argv(int argc, char * const argv[], PairingManager& pairing_manager);
 void check_env_variables(PairingManager& pairing_manager);

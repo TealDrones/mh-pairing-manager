@@ -355,7 +355,7 @@ PairingManager::get_pairing_json()
     Json::StreamWriterBuilder builder;
 #ifdef UNSECURE_DEBUG
     std::cout << timestamp() << Json::writeString(builder, _pairing_val) << std::endl;
-#endif    
+#endif
 
     builder["commentStyle"] = "None";
     builder["indentation"] = "";
@@ -386,7 +386,7 @@ PairingManager::_create_pairing_json()
 //-----------------------------------------------------------------------------
 bool
 PairingManager::_create_gcs_pairing_json(const std::string& s, std::string& connect_key,
-                                         std::string& channel, std::string& bandwidth, 
+                                         std::string& channel, std::string& bandwidth,
                                          std::string& network_id)
 {
     std::stringstream ss1;
@@ -483,7 +483,7 @@ PairingManager::pair_gcs(const std::string& req_body)
             << "Got connect key"
 #ifdef UNSECURE_DEBUG
             << ": " << connect_key
-#endif            
+#endif
             << " and channel: " << channel
             << " and bandwidth: " << bandwidth
             << " and network id: " << network_id
@@ -783,9 +783,9 @@ PairingManager::_write_json_gcs_file(Json::Value& val)
 {
     std::cout << timestamp() << "Write Json GCS file:" << std::endl;
     Json::StreamWriterBuilder builder;
-#ifdef UNSECURE_DEBUG    
+#ifdef UNSECURE_DEBUG
     std::cout << timestamp() << Json::writeString(builder, val) << std::endl;
-#endif    
+#endif
     builder["commentStyle"] = "None";
     builder["indentation"] = "";
 

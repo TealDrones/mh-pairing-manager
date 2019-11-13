@@ -10,7 +10,11 @@ Currently supported communication setups:
 - ZeroTier VPN over LTE
 - Taisync
 
+Library Dependencies for Ubuntu 18.04:
+- sudo apt install -y ragel libssl-dev libudev-dev libboost-all-dev
+
 Build instructions:
+- git submodule update --init --recursive
 - mkdir build
 - cd build
 - cmake ..

@@ -30,6 +30,12 @@ const std::string default_pairing_channel = "36";
 const std::string default_pairing_bandwidth = "1";
 const std::string default_transmit_power = "7";
 
+/**
+* State Transitions:
+* LOGIN -> PASSWORD -> CRYPTO_KEY -> POWER -> FREQUENCY -> BANDWIDTH -> NETWORK_ID -> SAVE -> DONE
+**/
+enum class ConfigMicrohardState {LOGIN, PASSWORD, CRYPTO_KEY, POWER, FREQUENCY, BANDWIDTH, NETWORK_ID, SAVE, DONE, NONE};
+
 class PairingManager
 {
 public:
@@ -58,6 +64,36 @@ public:
     std::string ethernet_device = "eno1";
     std::string persistent_folder = "/data/";
     int         mavlink_udp_port = 14531;
+
+    /**
+    * @brief       parses the communication to configure the microhard radio
+    * @param[out]  cmd, AT command to send to the microhard
+    * @param[out]  state, stage of the microhard configuration
+    * @param[in]   buffer, microhard response to a command
+    * @param[in]   n, number of bytes read from socket
+    * @param[in]   config_pwd, configuration password to log into a microhard via telnet
+    * @param[in]   encryption_key, key to encrypt the communication between microhards
+    * @param[in]   network_id, id to identify a network of devices
+    * @param[in]   channel, channel where the microhards communicate while paired
+    * @param[in]   bandwidth, each channel bandwidth [MHz]
+    * @param[in]   power, transmission power
+    **/
+    static void   _parse_buffer(std::string &cmd, ConfigMicrohardState &state, char *buffer, int n,
+      const std::string& config_pwd, const std::string& encryption_key, const std::string& network_id,
+      const std::string& channel, const std::string& bandwidth, const std::string& power);
+
+    /**
+    * @brief       parses the the microhard radio response to an AT command
+    * @param[in]   output, string containing the microhard response
+    * @returns     true if the AT command succeeded
+    **/
+    static bool   _check_at_result(const std::string& output);
+
+    /**
+    * @brief       prints the microhard response to AT commands for debugging purposes
+    * @param[in]   logbuf, string containing the microhard response
+    **/
+    static void   _print_microhard_buffer_debug(std::string &logbuf);
 
 private:
     OpenSSL_AES _aes;
@@ -92,11 +128,17 @@ private:
     bool        _unpair_gcs(const std::string& req_body);
     bool        _connect_gcs(const std::string& req_body, std::string& channel);
     bool        _disconnect_gcs(const std::string& req_body);
+    /**
+    * @brief       connects a socket to the vehicle
+    * @param[in]   sock, socket file descriptor
+    * @param[in]   air_ip, vehicle ip address
+    * @reurns      true, if the connection succeeded
+    **/
+    bool        _is_socket_connected(const int &sock, const std::string& air_ip);
     bool        _set_channel(const std::string& req_body, Json::Value& val);
     bool        _set_channel(const std::string& new_network_id, const std::string& new_ch,
                              const std::string& power, const std::string& new_bandwidth);
     bool        _write_json_gcs_file(Json::Value& val);
-    bool        _check_at_result(const std::string& output);
     bool        _verify_request(const std::string& req_body, Json::Value& val);
     std::string _pack_response(Json::Value& response);
     std::string _get_json_gcs_filename();

@@ -70,7 +70,106 @@ PairingManager::init()
     return true;
 }
 
-//-----------------------------------------------------------------------------
+void
+PairingManager::_print_microhard_buffer_debug(std::string &logbuf)
+{
+  size_t i = logbuf.find('\n');
+  while (i != std::string::npos) {
+      std::string s = logbuf.substr(0, i);
+      std::cout << timestamp() << "MH: " << s << std::endl;
+      logbuf = (i + 1 > logbuf.length()) ? "" : logbuf.substr(i + 1);
+      i = logbuf.find('\n');
+  }
+}
+
+void
+PairingManager::_parse_buffer(std::string &cmd, ConfigMicrohardState &state, char *buffer,
+  int n, const std::string& config_pwd, const std::string& encryption_key,
+  const std::string& network_id, const std::string& channel, const std::string& bandwidth, const std::string& power)
+{
+  std::string logbuf;
+  std::string output;
+  buffer[n] = 0;
+  output += buffer;
+  logbuf += buffer;
+#ifdef UNSECURE_DEBUG
+  _print_microhard_buffer_debug(logbuf);
+#endif
+
+  if (state == ConfigMicrohardState::LOGIN && output.find("login:") != std::string::npos) {
+      state = ConfigMicrohardState::PASSWORD;
+      cmd = "admin\n";
+  } else if (state == ConfigMicrohardState::PASSWORD && output.find("Password:") != std::string::npos) {
+      state = ConfigMicrohardState::CRYPTO_KEY;
+      cmd = config_pwd + "\n";
+  } else if (state == ConfigMicrohardState::CRYPTO_KEY && output.find("Entering") != std::string::npos) {
+      if (!encryption_key.empty()) {
+          cmd = "AT+MWVENCRYPT=1," + encryption_key + "\n";
+      } else {
+          cmd = "AT+MWVENCRYPT=0\n";
+      }
+      output = "";
+      state = ConfigMicrohardState::POWER;
+  } else if (state == ConfigMicrohardState::POWER && _check_at_result(output)) {
+      cmd = "AT+MWTXPOWER=" + power + "\n";
+      output = "";
+      state = ConfigMicrohardState::FREQUENCY;
+  } else if (state == ConfigMicrohardState::FREQUENCY && _check_at_result(output)) {
+      cmd = "AT+MWFREQ=" + channel + "\n";
+      output = "";
+      std::cout << timestamp() << "Set Microhard channel: " << channel << std::endl;
+      state = ConfigMicrohardState::BANDWIDTH;
+  } else if (state == ConfigMicrohardState::BANDWIDTH && _check_at_result(output)) {
+      cmd = "AT+MWBAND=" + bandwidth + "\n";
+      output = "";
+      std::cout << timestamp() << "Set Microhard bandwidth: " << bandwidth << std::endl;
+      state = ConfigMicrohardState::NETWORK_ID;
+  } else if (state == ConfigMicrohardState::NETWORK_ID && _check_at_result(output)) {
+      cmd = "AT+MWNETWORKID=" + network_id + "\n";
+      output = "";
+      std::cout << timestamp() << "Set Microhard network Id: " << network_id << std::endl;
+      state = ConfigMicrohardState::SAVE;
+  } else if (state == ConfigMicrohardState::SAVE && _check_at_result(output)) {
+      cmd = std::string("AT&W\n");
+  #ifdef UNSECURE_DEBUG
+      std::cout << timestamp() << "Set Microhard encryption key: " << encryption_key << std::endl;
+  #else
+      std::cout << timestamp() << "Set Microhard encryption key." << std::endl;
+  #endif
+      state = ConfigMicrohardState::DONE;
+  }
+}
+
+bool
+PairingManager::_is_socket_connected(const int &sock, const std::string& air_ip)
+{
+
+    fcntl(sock, F_SETFL, O_NONBLOCK);
+    struct sockaddr_in serv_addr;
+    memset(&serv_addr, '0', sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(microhard_settings_port);
+    if (inet_pton(AF_INET, air_ip.c_str(), &serv_addr.sin_addr) > 0) {
+        connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
+        fd_set fdset;
+        struct timeval tv;
+        FD_ZERO(&fdset);
+        FD_SET(sock, &fdset);
+        tv.tv_sec = 10;             /* 10 second timeout */
+        tv.tv_usec = 0;
+        if (select(sock + 1, NULL, &fdset, NULL, &tv) == 1) {
+            int so_error;
+            socklen_t len = sizeof so_error;
+            getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &len);
+            if (so_error == 0) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 void
 PairingManager::_configure_microhard(
     const std::string& air_ip,
@@ -82,47 +181,24 @@ PairingManager::_configure_microhard(
     const std::string& power)
 {
     std::lock_guard<std::mutex> guard(_mh_mutex);
-    bool connected = false;
     int retries = 5;
-    bool done = false;
+    ConfigMicrohardState state = ConfigMicrohardState::LOGIN;
 
     if (config_pwd == "") {
         std::cout << timestamp() << "Microhard config password not set." << std::endl;
         return;
     }
 
-    while (retries > 0 && !done) {
+    while (retries > 0 && (state != ConfigMicrohardState::DONE)) {
         std::cout << timestamp() << "Configure microhard." << std::endl;
+
+        state = ConfigMicrohardState::LOGIN;
+        ConfigMicrohardState state_prev = ConfigMicrohardState::NONE;
+
         int sock = socket(AF_INET, SOCK_STREAM, 0);
         if (sock >= 0) {
-            fcntl(sock, F_SETFL, O_NONBLOCK);
-            struct sockaddr_in serv_addr;
-            memset(&serv_addr, '0', sizeof(serv_addr));
-            serv_addr.sin_family = AF_INET;
-            serv_addr.sin_port = htons(microhard_settings_port);
-            if (inet_pton(AF_INET, air_ip.c_str(), &serv_addr.sin_addr) > 0)
-            {
-                connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
-                fd_set fdset;
-                struct timeval tv;
-                FD_ZERO(&fdset);
-                FD_SET(sock, &fdset);
-                tv.tv_sec = 10;             /* 10 second timeout */
-                tv.tv_usec = 0;
-                if (select(sock + 1, NULL, &fdset, NULL, &tv) == 1) {
-                    int so_error;
-                    socklen_t len = sizeof so_error;
-                    getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &len);
-                    if (so_error == 0) {
-                        connected = true;
-                    }
-                }
-            }
-            if (connected) {
+            if (_is_socket_connected(sock, air_ip)) {
                 char buffer[1024];
-                int state = 0;
-                std::string output;
-                std::string logbuf;
                 std::string cmd;
 
                 auto start_time = std::chrono::steady_clock::now();
@@ -138,69 +214,17 @@ PairingManager::_configure_microhard(
                         std::this_thread::sleep_for(10ms);
                         continue;
                     }
-                    buffer[n] = 0;
-                    output += buffer;
-                    logbuf += buffer;
-#ifdef UNSECURE_DEBUG
-                    size_t i = logbuf.find('\n');
-                    while (i != std::string::npos) {
-                        std::string s = logbuf.substr(0, i);
-                        std::cout << timestamp() << "MH: " << s << std::endl;
-                        logbuf = (i + 1 > logbuf.length()) ? "" : logbuf.substr(i + 1);
-                        i = logbuf.find('\n');
+
+                    _parse_buffer(cmd, state, buffer, n, config_pwd, encryption_key, network_id, channel, bandwidth, power);
+
+                    if (state_prev != state) {
+                      send(sock, cmd.c_str(), cmd.length(), 0);
                     }
-#endif
-                    if (state == 0 && output.find("login:") != std::string::npos) {
-                        state = 1;
-                        cmd = "admin\n";
-                        send(sock, cmd.c_str(), cmd.length(), 0);
-                    } else if (state == 1 && output.find("Password:") != std::string::npos) {
-                        state = 2;
-                        cmd = config_pwd + "\n";
-                        send(sock, cmd.c_str(), cmd.length(), 0);
-                    } else if (state == 2 && output.find("Entering") != std::string::npos) {
-                        if (!encryption_key.empty()) {
-                            cmd = "AT+MWVENCRYPT=1," + encryption_key + "\n";
-                        } else {
-                            cmd = "AT+MWVENCRYPT=0\n";
-                        }
-                        send(sock, cmd.c_str(), cmd.length(), 0);
-                        output = "";
-                        state = 3;
-                    } else if (state == 3 && _check_at_result(output)) {
-                        cmd = "AT+MWTXPOWER=" + power + "\n";
-                        send(sock, cmd.c_str(), cmd.length(), 0);
-                        output = "";
-                        state = 4;
-                    } else if (state == 4 && _check_at_result(output)) {
-                        cmd = "AT+MWFREQ=" + channel + "\n";
-                        send(sock, cmd.c_str(), cmd.length(), 0);
-                        output = "";
-                        std::cout << timestamp() << "Set Microhard channel: " << channel << std::endl;
-                        state = 5;
-                    } else if (state == 5 && _check_at_result(output)) {
-                        cmd = "AT+MWBAND=" + bandwidth + "\n";
-                        send(sock, cmd.c_str(), cmd.length(), 0);
-                        output = "";
-                        std::cout << timestamp() << "Set Microhard bandwidth: " << bandwidth << std::endl;
-                        state = 6;
-                    } else if (state == 6 && _check_at_result(output)) {
-                        cmd = "AT+MWNETWORKID=" + network_id + "\n";
-                        send(sock, cmd.c_str(), cmd.length(), 0);
-                        output = "";
-                        std::cout << timestamp() << "Set Microhard network Id: " << network_id << std::endl;
-                        state = 7;
-                    } else if (state == 7 && _check_at_result(output)) {
-                        cmd = std::string("AT&W\n");
-                        send(sock, cmd.c_str(), cmd.length(), 0);
-                        std::this_thread::sleep_for(500ms);
-#ifdef UNSECURE_DEBUG
-                        std::cout << timestamp() << "Set Microhard encryption key: " << encryption_key << std::endl;
-#else                      
-                        std::cout << timestamp() << "Set Microhard encryption key." << std::endl;
-#endif                    
-                        done = true;
-                        break;
+                    state_prev = state;
+
+                    if (state == ConfigMicrohardState::DONE) {
+                      std::this_thread::sleep_for(500ms);
+                      break;
                     }
                 }
             }
@@ -208,7 +232,7 @@ PairingManager::_configure_microhard(
             retries--;
         }
     }
-    if (!done) {
+    if (state != ConfigMicrohardState::DONE) {
         std::cout << timestamp() << "Could not configure Microhard modem. Exiting ..." << std::endl;
         std::this_thread::sleep_for(3s);
         exit(-1);

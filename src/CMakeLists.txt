@@ -85,7 +85,8 @@ target_link_libraries(pairing-manager-lib
 )
 
 set(SRCS_TEST
-	helper_test.cpp
+  helper_test.cpp
+  pairingmanager_test.cpp
 )
 add_executable(PAIRING_MANAGER_GTESTS ${SRCS_TEST})
 target_link_libraries(PAIRING_MANAGER_GTESTS ${GTEST_MAIN_LIBRARIES} ${GTEST_LIBRARIES} pairing-manager-lib)

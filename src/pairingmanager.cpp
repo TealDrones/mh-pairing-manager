@@ -736,6 +736,7 @@ PairingManager::_set_channel(const std::string& new_network_id, const std::strin
     }
     val["CC"] = new_ch;
     val["PW"] = power;
+    val["NID"] = new_network_id;
     std::string connect_key = val["EK"].asString();
 
     if (!_write_json_gcs_file(val)) {

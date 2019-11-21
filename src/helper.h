@@ -21,7 +21,7 @@
 #include <iostream>
 #include <getopt.h>
 
-#include "pairingmanager.h"
+#include "pairing_manager.h"
 #include "util.h"
 
 void help_argv_description(const char* pgm);

@@ -36,7 +36,7 @@ add_definitions(
 )
 
 file(GLOB CPP_SRC_FILES
-    pairingmanager.cpp
+    pairing_manager.cpp
     crc32.cpp
     util.cpp
     jsoncpp.cpp
@@ -44,7 +44,7 @@ file(GLOB CPP_SRC_FILES
     openssl_base64.cpp
     openssl_rsa.cpp
     openssl_rand.cpp
-    mavlinkhandler.cpp
+    mavlink_handler.cpp
     helper.cpp
 )
 
@@ -86,7 +86,7 @@ target_link_libraries(pairing-manager-lib
 
 set(SRCS_TEST
   helper_test.cpp
-  pairingmanager_test.cpp
+  pairing_manager_test.cpp
 )
 add_executable(PAIRING_MANAGER_GTESTS ${SRCS_TEST})
 target_link_libraries(PAIRING_MANAGER_GTESTS ${GTEST_MAIN_LIBRARIES} ${GTEST_LIBRARIES} pairing-manager-lib)

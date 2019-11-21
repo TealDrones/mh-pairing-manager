@@ -18,7 +18,7 @@
 
 #include <iostream>
 
-#include "mavlinkhandler.h"
+#include "mavlink_handler.h"
 #include "util.h"
 
 //-----------------------------------------------------------------------------

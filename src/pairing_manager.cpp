@@ -17,7 +17,7 @@
 ***************************************************************************/
 
 /**
- * @file pairingmanager.cpp
+ * @file pairing_manager.cpp
  *
  * @author Matej Frančeškin (Matej@auterion.com)
  */
@@ -28,7 +28,7 @@
 #include <served/served.hpp>
 
 #include "openssl_rand.h"
-#include "pairingmanager.h"
+#include "pairing_manager.h"
 #include "util.h"
 
 using namespace std::chrono_literals;

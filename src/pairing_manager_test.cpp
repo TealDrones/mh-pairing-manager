@@ -17,11 +17,11 @@
 ***************************************************************************/
 
 #include "gtest/gtest.h"
-#include "pairingmanager.h"
+#include "pairing_manager.h"
 
 #include <stdlib.h>
 
-TEST(pairingmanager_test, parse_buffer)
+TEST(pairing_manager_test, parse_buffer)
 {
   PairingManager pairing_manager;
   pairing_manager.link_type = "MH";
@@ -79,7 +79,7 @@ TEST(pairingmanager_test, parse_buffer)
   EXPECT_EQ(ConfigMicrohardState::DONE, state);
 }
 
-TEST(pairingmanager_test, parse_buffer_error)
+TEST(pairing_manager_test, parse_buffer_error)
 {
   PairingManager pairing_manager;
   pairing_manager.link_type = "MH";

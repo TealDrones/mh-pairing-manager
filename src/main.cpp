@@ -26,7 +26,7 @@
 #include <csignal>
 #include <served/served.hpp>
 
-#include "mavlinkhandler.h"
+#include "mavlink_handler.h"
 #include "helper.h"
 
 static bool should_exit = false;

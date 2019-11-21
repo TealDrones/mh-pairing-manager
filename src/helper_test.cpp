@@ -20,7 +20,7 @@
 #include "gtest/gtest.h"
 
 #include "helper.h"
-#include "pairingmanager.h"
+#include "pairing_manager.h"
 
 
 TEST(helper_test, check_env_variables)

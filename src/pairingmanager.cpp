@@ -66,13 +66,13 @@ PairingManager::init()
     }
 
     _aes.init(pairing_encryption_key);
-    _create_pairing_json();
+    create_pairing_json();
 
     std::thread([this]() {
         while (true)
         {
             _udp_mutex.lock();
-            _refresh_udp_endpoint();
+            refresh_udp_endpoint();
             _udp_mutex.unlock();
             std::this_thread::sleep_for(10s);
         }
@@ -82,7 +82,7 @@ PairingManager::init()
 }
 
 void
-PairingManager::_print_microhard_buffer_debug(std::string &logbuf)
+PairingManager::print_microhard_buffer_debug(std::string &logbuf)
 {
   size_t i = logbuf.find('\n');
   while (i != std::string::npos) {
@@ -94,7 +94,7 @@ PairingManager::_print_microhard_buffer_debug(std::string &logbuf)
 }
 
 void
-PairingManager::_parse_buffer(std::string &cmd, ConfigMicrohardState &state, char *buffer,
+PairingManager::parse_buffer(std::string &cmd, ConfigMicrohardState &state, char *buffer,
   int n, const std::string& config_pwd, const std::string& encryption_key,
   const std::string& network_id, const std::string& channel, const std::string& bandwidth, const std::string& power)
 {
@@ -104,7 +104,7 @@ PairingManager::_parse_buffer(std::string &cmd, ConfigMicrohardState &state, cha
   output += buffer;
   logbuf += buffer;
 #ifdef UNSECURE_DEBUG
-  _print_microhard_buffer_debug(logbuf);
+  print_microhard_buffer_debug(logbuf);
 #endif
 
   if (state == ConfigMicrohardState::LOGIN && output.find("login:") != std::string::npos) {
@@ -121,26 +121,26 @@ PairingManager::_parse_buffer(std::string &cmd, ConfigMicrohardState &state, cha
       }
       output = "";
       state = ConfigMicrohardState::POWER;
-  } else if (state == ConfigMicrohardState::POWER && _check_at_result(output)) {
+  } else if (state == ConfigMicrohardState::POWER && check_at_result(output)) {
       cmd = "AT+MWTXPOWER=" + power + "\n";
       output = "";
       state = ConfigMicrohardState::FREQUENCY;
-  } else if (state == ConfigMicrohardState::FREQUENCY && _check_at_result(output)) {
+  } else if (state == ConfigMicrohardState::FREQUENCY && check_at_result(output)) {
       cmd = "AT+MWFREQ=" + channel + "\n";
       output = "";
       std::cout << timestamp() << "Set Microhard channel: " << channel << std::endl;
       state = ConfigMicrohardState::BANDWIDTH;
-  } else if (state == ConfigMicrohardState::BANDWIDTH && _check_at_result(output)) {
+  } else if (state == ConfigMicrohardState::BANDWIDTH && check_at_result(output)) {
       cmd = "AT+MWBAND=" + bandwidth + "\n";
       output = "";
       std::cout << timestamp() << "Set Microhard bandwidth: " << bandwidth << std::endl;
       state = ConfigMicrohardState::NETWORK_ID;
-  } else if (state == ConfigMicrohardState::NETWORK_ID && _check_at_result(output)) {
+  } else if (state == ConfigMicrohardState::NETWORK_ID && check_at_result(output)) {
       cmd = "AT+MWNETWORKID=" + network_id + "\n";
       output = "";
       std::cout << timestamp() << "Set Microhard network Id: " << network_id << std::endl;
       state = ConfigMicrohardState::SAVE;
-  } else if (state == ConfigMicrohardState::SAVE && _check_at_result(output)) {
+  } else if (state == ConfigMicrohardState::SAVE && check_at_result(output)) {
       cmd = std::string("AT&W\n");
   #ifdef UNSECURE_DEBUG
       std::cout << timestamp() << "Set Microhard encryption key: " << encryption_key << std::endl;
@@ -152,7 +152,7 @@ PairingManager::_parse_buffer(std::string &cmd, ConfigMicrohardState &state, cha
 }
 
 bool
-PairingManager::_is_socket_connected(const int &sock, const std::string& air_ip)
+PairingManager::is_socket_connected(const int &sock, const std::string& air_ip)
 {
 
     fcntl(sock, F_SETFL, O_NONBLOCK);
@@ -182,7 +182,7 @@ PairingManager::_is_socket_connected(const int &sock, const std::string& air_ip)
 }
 
 void
-PairingManager::_configure_microhard(
+PairingManager::configure_microhard(
     const std::string& air_ip,
     const std::string& config_pwd,
     const std::string& encryption_key,
@@ -208,7 +208,7 @@ PairingManager::_configure_microhard(
 
         int sock = socket(AF_INET, SOCK_STREAM, 0);
         if (sock >= 0) {
-            if (_is_socket_connected(sock, air_ip)) {
+            if (is_socket_connected(sock, air_ip)) {
                 char buffer[1024];
                 std::string cmd;
 
@@ -226,7 +226,7 @@ PairingManager::_configure_microhard(
                         continue;
                     }
 
-                    _parse_buffer(cmd, state, buffer, n, config_pwd, encryption_key, network_id, channel, bandwidth, power);
+                    parse_buffer(cmd, state, buffer, n, config_pwd, encryption_key, network_id, channel, bandwidth, power);
 
                     if (state_prev != state) {
                       send(sock, cmd.c_str(), cmd.length(), 0);
@@ -252,16 +252,16 @@ PairingManager::_configure_microhard(
 
 //-----------------------------------------------------------------------------
 bool
-PairingManager::_check_at_result(const std::string& output)
+PairingManager::check_at_result(const std::string& output)
 {
     return (output.find("OK") != std::string::npos || output.find("ERROR:") != std::string::npos);
 }
 
 //-----------------------------------------------------------------------------
 void
-PairingManager::_reconfigure_microhard()
+PairingManager::reconfigure_microhard()
 {
-    _configure_microhard(_pairing_val["AIP"].asString(), _pairing_val["CP"].asString(),
+    configure_microhard(_pairing_val["AIP"].asString(), _pairing_val["CP"].asString(),
                          _pairing_val["EK"].asString(), pairing_network_id,
                          pairing_channel, _pairing_val["BW"].asString(),
                          default_transmit_power);
@@ -269,7 +269,7 @@ PairingManager::_reconfigure_microhard()
 
 //-----------------------------------------------------------------------------
 void
-PairingManager::_create_pairing_json_for_zerotier(Json::Value& val)
+PairingManager::create_pairing_json_for_zerotier(Json::Value& val)
 {
     val["ZTID"] = zerotier_id;
     std::string zt = exec("zerotier-cli listnetworks");
@@ -288,7 +288,7 @@ PairingManager::_create_pairing_json_for_zerotier(Json::Value& val)
 
 //-----------------------------------------------------------------------------
 void
-PairingManager::_create_pairing_json_for_microhard(Json::Value& val)
+PairingManager::create_pairing_json_for_microhard(Json::Value& val)
 {
     for (auto i : scan_ifaces()) {
         if (i.find(ip_prefix.c_str()) != std::string::npos) {
@@ -303,7 +303,7 @@ PairingManager::_create_pairing_json_for_microhard(Json::Value& val)
     val["PW"] = default_transmit_power;
 
     bool error = true;
-    std::ifstream in(_get_json_gcs_filename());
+    std::ifstream in(get_json_gcs_filename());
     if (in) {
         std::stringstream ss;
         Json::Value val_;
@@ -333,14 +333,14 @@ PairingManager::_create_pairing_json_for_microhard(Json::Value& val)
         val["PW"] = default_transmit_power;
     }
 
-    _configure_microhard(val["AIP"].asString(), val["CP"].asString(), val["EK"].asString(),
+    configure_microhard(val["AIP"].asString(), val["CP"].asString(), val["EK"].asString(),
                          val["NID"].asString(),
                          val["CC"].asString(), val["BW"].asString(), val["PW"].asString());
 }
 
 //-----------------------------------------------------------------------------
 void
-PairingManager::_create_pairing_json_for_taisync(Json::Value& val)
+PairingManager::create_pairing_json_for_taisync(Json::Value& val)
 {
     std::string cmd = std::string("ifconfig ") + ethernet_device + " 192.168.0.2 up";
     exec(cmd.c_str());
@@ -357,11 +357,11 @@ PairingManager::get_pairing_json()
     _pairing_val["LT"] = link_type;
     _pairing_val["PP"] = pairing_port;
     if (link_type == "ZT") {
-        _create_pairing_json_for_zerotier(_pairing_val);
+        create_pairing_json_for_zerotier(_pairing_val);
     } else if (link_type == "MH") {
-        _create_pairing_json_for_microhard(_pairing_val);
+        create_pairing_json_for_microhard(_pairing_val);
     } else if (link_type == "TS") {
-        _create_pairing_json_for_taisync(_pairing_val);
+        create_pairing_json_for_taisync(_pairing_val);
     }
     Json::StreamWriterBuilder builder;
 #ifdef UNSECURE_DEBUG
@@ -380,7 +380,7 @@ PairingManager::get_pairing_json()
 
 //-----------------------------------------------------------------------------
 void
-PairingManager::_create_pairing_json()
+PairingManager::create_pairing_json()
 {
     std::ofstream out(json_filename);
     if (!out) {
@@ -396,7 +396,7 @@ PairingManager::_create_pairing_json()
 
 //-----------------------------------------------------------------------------
 bool
-PairingManager::_create_gcs_pairing_json(const std::string& s, std::string& connect_key,
+PairingManager::create_gcs_pairing_json(const std::string& s, std::string& connect_key,
                                          std::string& channel, std::string& bandwidth,
                                          std::string& network_id)
 {
@@ -423,12 +423,12 @@ PairingManager::_create_gcs_pairing_json(const std::string& s, std::string& conn
     val["DevPublicKey"] = _rsa.get_public_key();
     val["DevPrivateKey"] = _rsa.get_private_key();
 
-    return _write_json_gcs_file(val);
+    return write_json_gcs_file(val);
 }
 
 //-------------------------------------------------------------------
 void
-PairingManager::_refresh_udp_endpoint()
+PairingManager::refresh_udp_endpoint()
 {
 
     if (!_ip.empty() && !_port.empty()) {
@@ -436,25 +436,25 @@ PairingManager::_refresh_udp_endpoint()
         // Start new UDP endpoint in mavlink router with specified IP
         // On UDP Name IP Port Eavesdropping
         std::string msg = "add udp gcs " + _ip + " " + _port + " 0";
-        _write_to_mavlink_router_pipe(msg);
+        write_to_mavlink_router_pipe(msg);
     }
     // Add local dynamic UDP endpoint for pairing manager connection
     std::string msg = "add udp pairing-manager 127.0.0.1 " + std::to_string(mavlink_udp_port) + " 0";
-    _write_to_mavlink_router_pipe(msg);
+    write_to_mavlink_router_pipe(msg);
 
 }
 
 //-------------------------------------------------------------------
 void
-PairingManager::_remove_endpoint(const std::string& name)
+PairingManager::remove_endpoint(const std::string& name)
 {
     std::cout << timestamp() << "Removing UDP endpoint: " << name << std::endl;
     std::string msg = "remove " + name;
-    _write_to_mavlink_router_pipe(msg);
+    write_to_mavlink_router_pipe(msg);
 }
 
 void
-PairingManager::_write_to_mavlink_router_pipe(const std::string &msg)
+PairingManager::write_to_mavlink_router_pipe(const std::string &msg)
 {
   // Add end of line to ensure proper command parsing on the mavlink-router side
   std::string msg_with_end_of_line = msg + "\n";
@@ -463,17 +463,17 @@ PairingManager::_write_to_mavlink_router_pipe(const std::string &msg)
 
 //-------------------------------------------------------------------
 void
-PairingManager::_open_udp_endpoint(const std::string& ip, const std::string& port)
+PairingManager::open_udp_endpoint(const std::string& ip, const std::string& port)
 {
     std::lock_guard<std::mutex> guard(_udp_mutex);
     _ip = ip;
     _port = port;
-    _refresh_udp_endpoint();
+    refresh_udp_endpoint();
 }
 
 //-----------------------------------------------------------------------------
 std::string
-PairingManager::pair_gcs(const std::string& req_body)
+PairingManager::pair_gcs_request(const std::string& req_body)
 {
     std::string connect_key;
     std::string channel;
@@ -483,7 +483,7 @@ PairingManager::pair_gcs(const std::string& req_body)
     val["CMD"] = "pair";
     val["NM"] = machine_name;
 
-    if (_create_gcs_pairing_json(req_body, connect_key, channel, bandwidth, network_id) &&
+    if (create_gcs_pairing_json(req_body, connect_key, channel, bandwidth, network_id) &&
          connect_key != "" && channel != "" && network_id != "") {
         std::cout << timestamp()
             << "Got connect key"
@@ -496,7 +496,7 @@ PairingManager::pair_gcs(const std::string& req_body)
             << std::endl;
         std::lock_guard<std::mutex> guard(_pairing_mutex);
         _pairing_mode = false;
-        _configure_microhard(_pairing_val["AIP"].asString(), _pairing_val["CP"].asString(),
+        configure_microhard(_pairing_val["AIP"].asString(), _pairing_val["CP"].asString(),
                               connect_key, network_id,
                               channel, bandwidth, default_transmit_power);
         val["CC"] = channel;
@@ -507,14 +507,14 @@ PairingManager::pair_gcs(const std::string& req_body)
         std::cout << timestamp() << "Did not get the connect key" << std::endl;
         val["RES"] = "rejected";
     }
-    std::string message = _pack_response(val);
+    std::string message = pack_response(val);
 
     return _aes.encrypt(message);
 }
 
 //-----------------------------------------------------------------------------
 bool
-PairingManager::_verify_request(const std::string& req_body, Json::Value& val)
+PairingManager::verify_request(const std::string& req_body, Json::Value& val)
 {
     auto a = split(_rsa.decrypt(req_body), ';');
     if (a.size() < 2 || !_gcs_rsa.verify(a[0], a[1])) {
@@ -535,7 +535,7 @@ PairingManager::_verify_request(const std::string& req_body, Json::Value& val)
 
 //-----------------------------------------------------------------------------
 std::string
-PairingManager::_pack_response(Json::Value& response)
+PairingManager::pack_response(Json::Value& response)
 {
     Json::StreamWriterBuilder builder;
 #ifdef UNSECURE_DEBUG
@@ -552,29 +552,29 @@ PairingManager::_pack_response(Json::Value& response)
 
 //-----------------------------------------------------------------------------
 std::string
-PairingManager::unpair_gcs(const std::string& req_body)
+PairingManager::unpair_gcs_request(const std::string& req_body)
 {
     std::cout << timestamp() << "Got unpair request" << std::endl;
 
     Json::Value val;
     val["CMD"] = "unpair";
     val["NM"] = machine_name;
-    if (_unpair_gcs(req_body)) {
+    if (unpair_gcs(req_body)) {
         val["RES"] = "accepted";
     } else {
         val["RES"] = "rejected";
     }
-    std::string message = _pack_response(val);
+    std::string message = pack_response(val);
 
     return _gcs_rsa.encrypt(message + ";" + _rsa.sign(message));
 }
 
 //-----------------------------------------------------------------------------
 bool
-PairingManager::_unpair_gcs(const std::string& req_body)
+PairingManager::unpair_gcs(const std::string& req_body)
 {
     Json::Value val;
-    if (!_verify_request(req_body, val)) {
+    if (!verify_request(req_body, val)) {
         std::cout << timestamp() << "Unpair request verification failed" << std::endl;
         return false;
     }
@@ -587,13 +587,13 @@ PairingManager::_unpair_gcs(const std::string& req_body)
     std::lock_guard<std::mutex> udp_guard(_udp_mutex);
     _ip = "";
     _port = "";
-    _remove_endpoint("gcs");
-    remove(_get_json_gcs_filename().c_str());
+    remove_endpoint("gcs");
+    remove(get_json_gcs_filename().c_str());
 
     std::lock_guard<std::mutex> pairing_guard(_pairing_mutex);
     if (!_pairing_mode) {
         _pairing_val["EK"] = OpenSSL_Rand::random_string(random_aes_key_length);
-        _reconfigure_microhard();
+        reconfigure_microhard();
     }
 
     return true;
@@ -601,7 +601,7 @@ PairingManager::_unpair_gcs(const std::string& req_body)
 
 //-----------------------------------------------------------------------------
 std::string
-PairingManager::connect_gcs(const std::string& req_body)
+PairingManager::connect_gcs_request(const std::string& req_body)
 {
     std::cout << timestamp() << "Got connect request" << std::endl;
 
@@ -609,23 +609,23 @@ PairingManager::connect_gcs(const std::string& req_body)
     val["CMD"] = "connect";
     val["NM"] = machine_name;
     std::string channel;
-    if (_connect_gcs(req_body, channel)) {
+    if (connect_gcs(req_body, channel)) {
         val["RES"] = "accepted";
         val["CC"] = channel;
     } else {
         val["RES"] = "rejected";
     }
-    std::string message = _pack_response(val);
+    std::string message = pack_response(val);
 
     return _gcs_rsa.encrypt(message + ";" + _rsa.sign(message));
 }
 
 //-----------------------------------------------------------------------------
 bool
-PairingManager::_connect_gcs(const std::string& req_body, std::string& channel)
+PairingManager::connect_gcs(const std::string& req_body, std::string& channel)
 {
     Json::Value val;
-    if (!_verify_request(req_body, val)) {
+    if (!verify_request(req_body, val)) {
         std::cout << timestamp() << "Connection request verification failed" << std::endl;
         return false;
     }
@@ -635,7 +635,7 @@ PairingManager::_connect_gcs(const std::string& req_body, std::string& channel)
     Json::StreamWriterBuilder builder;
     std::cout << timestamp() << Json::writeString(builder, val) << std::endl;
 #endif
-    if (!_set_channel(val["NID"].asString(), val["CC"].asString(), val["PW"].asString(), val["BW"].asString())) {
+    if (!set_channel(val["NID"].asString(), val["CC"].asString(), val["PW"].asString(), val["BW"].asString())) {
         std::cout << timestamp() << "Set channel failed!" << std::endl;
         return false;
     }
@@ -645,7 +645,7 @@ PairingManager::_connect_gcs(const std::string& req_body, std::string& channel)
     std::string port = val["P"].asString();
     if (!ip.empty() && !port.empty()) {
         std::cout << timestamp() << "Creating UDP endpoint " << ip << ":" << port << std::endl;
-        _open_udp_endpoint(ip, port);
+        open_udp_endpoint(ip, port);
     }
 
     return true;
@@ -653,29 +653,29 @@ PairingManager::_connect_gcs(const std::string& req_body, std::string& channel)
 
 //-----------------------------------------------------------------------------
 std::string
-PairingManager::disconnect_gcs(const std::string& req_body)
+PairingManager::disconnect_gcs_request(const std::string& req_body)
 {
     std::cout << timestamp() << "Got disconnect request" << std::endl;
 
     Json::Value val;
     val["CMD"] = "disconnect";
     val["NM"] = machine_name;
-    if (_disconnect_gcs(req_body)) {
+    if (disconnect_gcs(req_body)) {
         val["RES"] = "accepted";
     } else {
         val["RES"] = "rejected";
     }
-    std::string message = _pack_response(val);
+    std::string message = pack_response(val);
 
     return _gcs_rsa.encrypt(message + ";" + _rsa.sign(message));
 }
 
 //-----------------------------------------------------------------------------
 bool
-PairingManager::_disconnect_gcs(const std::string& req_body)
+PairingManager::disconnect_gcs(const std::string& req_body)
 {
     Json::Value val;
-    if (!_verify_request(req_body, val)) {
+    if (!verify_request(req_body, val)) {
         std::cout << timestamp() << "Disconnect request verification failed" << std::endl;
         return false;
     }
@@ -685,40 +685,40 @@ PairingManager::_disconnect_gcs(const std::string& req_body)
     Json::StreamWriterBuilder builder;
     std::cout << timestamp() << Json::writeString(builder, val) << std::endl;
 #endif
-    if (!_set_channel(val["NID"].asString(), val["CC"].asString(), val["PW"].asString(), val["BW"].asString())) {
+    if (!set_channel(val["NID"].asString(), val["CC"].asString(), val["PW"].asString(), val["BW"].asString())) {
         std::cout << timestamp() << "Set channel failed!" << std::endl;
         return false;
     }
 
-    _remove_endpoint("gcs");
+    remove_endpoint("gcs");
 
     return true;
 }
 
 //-----------------------------------------------------------------------------
 std::string
-PairingManager::set_channel(const std::string& req_body)
+PairingManager::set_channel_request(const std::string& req_body)
 {
     std::cout << timestamp() << "Got set channel request: " << req_body << std::endl;
 
     Json::Value val;
-    if (_set_channel(req_body, val)) {
+    if (set_channel(req_body, val)) {
         val["RES"] = "accepted";
     } else {
         val["RES"] = "rejected";
     }
     val["CMD"] = "channel";
     val["NM"] = machine_name;
-    std::string message = _pack_response(val);
+    std::string message = pack_response(val);
 
     return _gcs_rsa.encrypt(message + ";" + _rsa.sign(message));
 }
 
 //-----------------------------------------------------------------------------
 bool
-PairingManager::_set_channel(const std::string& req_body, Json::Value& val)
+PairingManager::set_channel(const std::string& req_body, Json::Value& val)
 {
-    if (!_verify_request(req_body, val)) {
+    if (!verify_request(req_body, val)) {
         std::cout << timestamp() << "Set channel request verification failed" << std::endl;
         return false;
     }
@@ -728,7 +728,7 @@ PairingManager::_set_channel(const std::string& req_body, Json::Value& val)
     Json::StreamWriterBuilder builder;
     std::cout << timestamp() << Json::writeString(builder, val) << std::endl;
 #endif
-    if (!_set_channel(val["NID"].asString(), val["CC"].asString(), val["PW"].asString(), val["BW"].asString())) {
+    if (!set_channel(val["NID"].asString(), val["CC"].asString(), val["PW"].asString(), val["BW"].asString())) {
         std::cout << timestamp() << "Set channel failed!" << std::endl;
         return false;
     }
@@ -738,7 +738,7 @@ PairingManager::_set_channel(const std::string& req_body, Json::Value& val)
 
 //-----------------------------------------------------------------------------
 bool
-PairingManager::_set_channel(const std::string& new_network_id, const std::string& new_ch,
+PairingManager::set_channel(const std::string& new_network_id, const std::string& new_ch,
                              const std::string& power, const std::string& new_bandwidth)
 {
     try {
@@ -750,7 +750,7 @@ PairingManager::_set_channel(const std::string& new_network_id, const std::strin
         return false;
     }
 
-    std::ifstream in(_get_json_gcs_filename());
+    std::ifstream in(get_json_gcs_filename());
     if (!in) {
         return false;
     }
@@ -769,14 +769,14 @@ PairingManager::_set_channel(const std::string& new_network_id, const std::strin
     val["NID"] = new_network_id;
     std::string connect_key = val["EK"].asString();
 
-    if (!_write_json_gcs_file(val)) {
+    if (!write_json_gcs_file(val)) {
         return false;
     }
 
     std::thread([this, connect_key, new_network_id, new_ch, new_bandwidth, power]() {
         std::this_thread::sleep_for(100ms);
         std::cout << "Setting channel: " << new_ch << " Power: " << power << " Network ID: " << new_network_id << std::endl;
-        _configure_microhard(_pairing_val["AIP"].asString(), _pairing_val["CP"].asString(),
+        configure_microhard(_pairing_val["AIP"].asString(), _pairing_val["CP"].asString(),
                              connect_key, new_network_id, new_ch, new_bandwidth, power);
     }).detach();
 
@@ -785,7 +785,7 @@ PairingManager::_set_channel(const std::string& new_network_id, const std::strin
 
 //-----------------------------------------------------------------------------
 bool
-PairingManager::_write_json_gcs_file(Json::Value& val)
+PairingManager::write_json_gcs_file(Json::Value& val)
 {
     std::cout << timestamp() << "Write Json GCS file:" << std::endl;
     Json::StreamWriterBuilder builder;
@@ -798,7 +798,7 @@ PairingManager::_write_json_gcs_file(Json::Value& val)
     std::stringstream ss;
     ss << Json::writeString(builder, val);
     std::string modified_s = _aes.encrypt(ss.str());
-    std::string json_gcs_filename = _get_json_gcs_filename();
+    std::string json_gcs_filename = get_json_gcs_filename();
     std::ofstream out(json_gcs_filename);
     if (!out) {
         std::cout << timestamp() << "Failed to open " << json_gcs_filename << " for writing" << std::endl;
@@ -835,8 +835,8 @@ PairingManager::handlePairingCommand()
             std::lock_guard<std::mutex> udp_guard(_udp_mutex);
             _ip = "";
             _port = "";
-            _remove_endpoint("gcs");
-            _configure_microhard(_pairing_val["AIP"].asString(),
+            remove_endpoint("gcs");
+            configure_microhard(_pairing_val["AIP"].asString(),
                                  _pairing_val["CP"].asString(),
                                  pairing_encryption_key,
                                  pairing_network_id,
@@ -854,7 +854,7 @@ PairingManager::handlePairingCommand()
 
 //-----------------------------------------------------------------------------
 std::string
-PairingManager::_get_json_gcs_filename()
+PairingManager::get_json_gcs_filename()
 {
     return persistent_folder + json_gcs_filename;
 };

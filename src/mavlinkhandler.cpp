@@ -105,7 +105,7 @@ MAVLinkHandler::send_cmd_ack(uint8_t target_sysid, uint8_t target_compid, uint16
 
 //-----------------------------------------------------------------------------
 void
-MAVLinkHandler::_send_heartbeat()
+MAVLinkHandler::send_heartbeat()
 {
     if(_hasSysID) {
         mavlink_message_t msg;
@@ -164,7 +164,7 @@ MAVLinkHandler::run()
             auto current = std::chrono::steady_clock::now();
             if(std::chrono::duration_cast<std::chrono::milliseconds>(current - _lastHeartbeat).count() > 1000) {
                 _lastHeartbeat = current;
-                _send_heartbeat();
+                send_heartbeat();
             }
         }
     }

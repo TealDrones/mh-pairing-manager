@@ -44,7 +44,7 @@ public:
     uint8_t sysID                   () { return _sysID; }
 
 private:
-    void    _send_heartbeat         ();
+    void    send_heartbeat         ();
 
 private:
     uint8_t             _compID = 0;

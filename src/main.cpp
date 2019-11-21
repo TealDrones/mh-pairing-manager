@@ -64,19 +64,19 @@ main(int argc, char *argv[])
         res << "Running";
     });
     mux.handle("/pair").post([&](served::response& res, const served::request& req) {
-        res << pairing_manager.pair_gcs(req.body());
+        res << pairing_manager.pair_gcs_request(req.body());
     });
     mux.handle("/unpair").post([&](served::response& res, const served::request& req) {
-        res << pairing_manager.unpair_gcs(req.body());
+        res << pairing_manager.unpair_gcs_request(req.body());
     });
     mux.handle("/connect").post([&](served::response& res, const served::request& req) {
-        res << pairing_manager.connect_gcs(req.body());
+        res << pairing_manager.connect_gcs_request(req.body());
     });
     mux.handle("/disconnect").post([&](served::response& res, const served::request& req) {
-        res << pairing_manager.disconnect_gcs(req.body());
+        res << pairing_manager.disconnect_gcs_request(req.body());
     });
     mux.handle("/channel").post([&](served::response& res, const served::request& req) {
-        res << pairing_manager.set_channel(req.body());
+        res << pairing_manager.set_channel_request(req.body());
     });
 #ifdef UNSECURE_DEBUG
     // Used for debugging if pairing button on PX4 is not available

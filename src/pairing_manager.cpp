@@ -306,21 +306,21 @@ PairingManager::create_pairing_json_for_microhard(Json::Value& val)
     std::ifstream in(get_json_gcs_filename());
     if (in) {
         std::stringstream ss;
-        Json::Value val_;
+        Json::Value val_from_json_gcs;
         Json::CharReaderBuilder jsonReader;
         std::string errs;
 
         ss << _aes.decrypt(std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()));
-        if (Json::parseFromStream(jsonReader, ss, &val_, &errs)) {
-            _rsa.generate_public(val_["DevPublicKey"].asString());
-            _rsa.generate_private(val_["DevPrivateKey"].asString());
-            _gcs_rsa.generate_public(val_["PublicKey"].asString());
+        if (Json::parseFromStream(jsonReader, ss, &val_from_json_gcs, &errs)) {
+            _rsa.generate_public(val_from_json_gcs["DevPublicKey"].asString());
+            _rsa.generate_private(val_from_json_gcs["DevPrivateKey"].asString());
+            _gcs_rsa.generate_public(val_from_json_gcs["PublicKey"].asString());
 
-            val["EK"] = val_["EK"];
-            val["CC"] = val_["CC"];
-            val["NID"] = val_["NID"];
-            val["PW"] = val_["PW"];
-            val["BW"] = val_["BW"];
+            val["EK"] = val_from_json_gcs["EK"];
+            val["CC"] = val_from_json_gcs["CC"];
+            val["NID"] = val_from_json_gcs["NID"];
+            val["PW"] = val_from_json_gcs["PW"];
+            val["BW"] = val_from_json_gcs["BW"];
 
             error = false;
         }

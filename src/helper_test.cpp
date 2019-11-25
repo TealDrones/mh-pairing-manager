@@ -22,13 +22,11 @@
 #include "helper.h"
 #include "pairing_manager.h"
 
-
-TEST(helper_test, check_env_variables)
-{
+TEST(helper_test, check_env_variables) {
   // GIVEN: the pairing manager class constructor and some environment variables
   PairingManager pairing_manager;
   // don't repeat pattern: it changes the global state
-  setenv("PAIRING_MNG_DEVICE_NAME","machine_name_test", 0);
+  setenv("PAIRING_MNG_DEVICE_NAME", "machine_name_test", 0);
   setenv("PAIRING_MNG_TYPE", "type", 0);
 
   // WHEN: we check for the environment variables
@@ -54,30 +52,16 @@ TEST(helper_test, check_env_variables)
   unsetenv("PAIRING_MNG_TYPE");
 }
 
-TEST(helper_test, parse_argv)
-{
+TEST(helper_test, parse_argv) {
   // GIVEN: the pairing manager class constructor and all the possible command line arguments
   PairingManager pairing_manager;
-  const char * const argv[] = {
-        "name",
-        "-n", "machine_name",
-        "-d", "/data",
-        "-m", "12550",
-        "-p", "33333",
-        "-l", "link",
-        "-i", "192.168.168",
-        "-a", "192.168.168.2",
-        "-c", "auterion",
-        "-k", "1234567890",
-        "-s", "CH_36",
-        "-f", "36",
-        "-z", "123",
-        "-e", "eth0",
-        "-m", "12345"
-    };
+  const char *const argv[] = {
+      "name",  "-n", "machine_name", "-d", "/data",         "-m", "12550",    "-p", "33333",      "-l",
+      "link",  "-i", "192.168.168",  "-a", "192.168.168.2", "-c", "auterion", "-k", "1234567890", "-s",
+      "CH_36", "-f", "36",           "-z", "123",           "-e", "eth0",     "-m", "12345"};
 
   // WHEN: we parse the command line arguments
-  parse_argv(sizeof(argv)/sizeof(argv[0]), const_cast<char * const *>(argv), pairing_manager);
+  parse_argv(sizeof(argv) / sizeof(argv[0]), const_cast<char *const *>(argv), pairing_manager);
 
   // THEN: we expect the class memebers to updated with the variables from the command line
   EXPECT_EQ("machine_name", pairing_manager.machine_name);

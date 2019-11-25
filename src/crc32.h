@@ -40,8 +40,8 @@
  * Included Files
  ****************************************************************************/
 
-#include <sys/types.h>
 #include <stdint.h>
+#include <sys/types.h>
 
 /****************************************************************************
  * Public Function Prototypes
@@ -49,8 +49,7 @@
 
 #ifdef __cplusplus
 #define EXTERN extern "C"
-extern "C"
-{
+extern "C" {
 #else
 #define EXTERN extern
 #endif

@@ -20,44 +20,45 @@
 
 #include <mavlink.h>
 
-#include <unistd.h>
+#include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
-#include <arpa/inet.h>
 #include <poll.h>
+#include <unistd.h>
 
 #include <chrono>
+#include <functional>
 #include <mutex>
 #include <thread>
-#include <functional>
 
-class MAVLinkHandler
-{
-public:
-    MAVLinkHandler();
-    ~MAVLinkHandler();
+class MAVLinkHandler {
+ public:
+  MAVLinkHandler();
+  ~MAVLinkHandler();
 
-    bool    init                    (uint16_t localPort, uint8_t comp_id, std::function<void(mavlink_message_t *msg, struct sockaddr* srcaddr)> messageHandler);
-    void    send_mavlink_message    (const mavlink_message_t *message, struct sockaddr* srcaddr = nullptr);
-    void    send_cmd_ack            (uint8_t target_sysid, uint8_t target_compid, uint16_t cmd, unsigned char result, struct sockaddr* srcaddr);
-    void    run                     ();
-    uint8_t sysID                   () { return _sysID; }
+  bool init(uint16_t localPort, uint8_t comp_id,
+            std::function<void(mavlink_message_t* msg, struct sockaddr* srcaddr)> messageHandler);
+  void send_mavlink_message(const mavlink_message_t* message, struct sockaddr* srcaddr = nullptr);
+  void send_cmd_ack(uint8_t target_sysid, uint8_t target_compid, uint16_t cmd, unsigned char result,
+                    struct sockaddr* srcaddr);
+  void run();
+  uint8_t sysID() { return _sysID; }
 
-private:
-    void    send_heartbeat         ();
+ private:
+  void send_heartbeat();
 
-private:
-    uint8_t             _compID = 0;
-    uint8_t             _sysID  = 0;
-    int                 _fd     = -1;
-    struct sockaddr_in  _myaddr{};        ///< The locally bound address
-    struct sockaddr_in  _targetAddr{};    ///< Target address (router)
-    struct pollfd       _fds[1]{};
-    bool                _threadRunning = true;
-    bool                _hasTarget = false;
-    bool                _hasSysID = false;
-    std::mutex          _udpMutex;
-    std::thread         _udpThread;
-    std::function<void(mavlink_message_t *msg, struct sockaddr* srcaddr)> _msgHandlerCallback = nullptr;
-    std::chrono::steady_clock::time_point _lastHeartbeat;
+ private:
+  uint8_t _compID = 0;
+  uint8_t _sysID = 0;
+  int _fd = -1;
+  struct sockaddr_in _myaddr {};      ///< The locally bound address
+  struct sockaddr_in _targetAddr {};  ///< Target address (router)
+  struct pollfd _fds[1]{};
+  bool _threadRunning = true;
+  bool _hasTarget = false;
+  bool _hasSysID = false;
+  std::mutex _udpMutex;
+  std::thread _udpThread;
+  std::function<void(mavlink_message_t* msg, struct sockaddr* srcaddr)> _msgHandlerCallback = nullptr;
+  std::chrono::steady_clock::time_point _lastHeartbeat;
 };

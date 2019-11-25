@@ -20,8 +20,7 @@
 
 #include <string>
 
-class OpenSSL_Rand
-{
-public:
-    static std::string random_string(uint length);
+class OpenSSL_Rand {
+ public:
+  static std::string random_string(uint length);
 };

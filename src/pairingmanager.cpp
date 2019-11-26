@@ -43,6 +43,16 @@ PairingManager::PairingManager() :
     _aes()
 {
     _last_pairing_time_stamp = std::chrono::steady_clock::now();
+    _fd = open(pipe_path, O_RDWR);
+    if (_fd < 0) {
+        std::cout << timestamp() << "Failed to open pipe: " << pipe_path << std::endl;
+        return;
+    }
+}
+
+PairingManager::~PairingManager()
+{
+  close(_fd);
 }
 
 //-----------------------------------------------------------------------------
@@ -419,40 +429,35 @@ PairingManager::_create_gcs_pairing_json(const std::string& s, std::string& conn
 void
 PairingManager::_refresh_udp_endpoint()
 {
-    int fd = open(pipe_path, O_RDWR);
-    if (fd < 0) {
-        std::cout << timestamp() << "Failed to open pipe: " << pipe_path << std::endl;
-        return;
-    }
 
     if (!_ip.empty() && !_port.empty()) {
         std::cout << timestamp() << "Refreshing UDP endpoint " << _ip << ":" << _port << std::endl;
         // Start new UDP endpoint in mavlink router with specified IP
-        // Op UDP Name IP Port Eavesdropping
-        std::string msg = "add udp gcs " + _ip + " " + _port + " 0\n";
-        write(fd, msg.c_str(), msg.length());
+        // On UDP Name IP Port Eavesdropping
+        std::string msg = "add udp gcs " + _ip + " " + _port + " 0";
+        _write_to_mavlink_router_pipe(msg);
     }
-
     // Add local dynamic UDP endpoint for pairing manager connection
-    std::string msg = "add udp pairing-manager 127.0.0.1 " + std::to_string(mavlink_udp_port) + " 0\n";
-    write(fd, msg.c_str(), msg.length());
-    close(fd);
+    std::string msg = "add udp pairing-manager 127.0.0.1 " + std::to_string(mavlink_udp_port) + " 0";
+    _write_to_mavlink_router_pipe(msg);
+
 }
 
 //-------------------------------------------------------------------
 void
 PairingManager::_remove_endpoint(const std::string& name)
 {
-    int fd = open(pipe_path, O_RDWR);
-    if (fd < 0) {
-        return;
-    }
-
     std::cout << timestamp() << "Removing UDP endpoint: " << name << std::endl;
     std::string msg = "remove " + name;
-    write(fd, msg.c_str(), msg.length());
+    _write_to_mavlink_router_pipe(msg);
+}
 
-    close(fd);
+void
+PairingManager::_write_to_mavlink_router_pipe(const std::string &msg)
+{
+  // Add end of line to ensure proper command parsing on the mavlink-router side
+  std::string msg_with_end_of_line = msg + "\n";
+  write(_fd, msg_with_end_of_line.c_str(), msg_with_end_of_line.length());
 }
 
 //-------------------------------------------------------------------

@@ -40,6 +40,7 @@ class PairingManager
 {
 public:
     PairingManager();
+    ~PairingManager();
 
     bool        init();
     std::string get_pairing_json();
@@ -107,6 +108,7 @@ private:
     std::string _port = "";
     std::mutex  _udp_mutex;
     std::mutex  _mh_mutex;
+    int         _fd;
 
     std::chrono::steady_clock::time_point _last_pairing_time_stamp;
 
@@ -125,6 +127,11 @@ private:
     void        _open_udp_endpoint(const std::string& ip, const std::string& port);
     void        _refresh_udp_endpoint();
     void        _remove_endpoint(const std::string& name);
+    /**
+    * @brief       writes to the mavlink router pipe
+    * @param[in]   msg, buffer to be written
+    **/
+    void        _write_to_mavlink_router_pipe(const std::string &msg);
     bool        _unpair_gcs(const std::string& req_body);
     bool        _connect_gcs(const std::string& req_body, std::string& channel);
     bool        _disconnect_gcs(const std::string& req_body);

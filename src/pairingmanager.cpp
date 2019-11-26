@@ -429,12 +429,12 @@ PairingManager::_refresh_udp_endpoint()
         std::cout << timestamp() << "Refreshing UDP endpoint " << _ip << ":" << _port << std::endl;
         // Start new UDP endpoint in mavlink router with specified IP
         // Op UDP Name IP Port Eavesdropping
-        std::string msg = "add udp gcs " + _ip + " " + _port + " 0";
+        std::string msg = "add udp gcs " + _ip + " " + _port + " 0\n";
         write(fd, msg.c_str(), msg.length());
     }
 
     // Add local dynamic UDP endpoint for pairing manager connection
-    std::string msg = "add udp pairing-manager 127.0.0.1 " + std::to_string(mavlink_udp_port) + " 0";
+    std::string msg = "add udp pairing-manager 127.0.0.1 " + std::to_string(mavlink_udp_port) + " 0\n";
     write(fd, msg.c_str(), msg.length());
     close(fd);
 }

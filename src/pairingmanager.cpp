@@ -24,6 +24,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <cerrno>
 #include <served/served.hpp>
 
 #include "openssl_rand.h"
@@ -45,8 +46,8 @@ PairingManager::PairingManager() :
     _last_pairing_time_stamp = std::chrono::steady_clock::now();
     _fd = open(pipe_path, O_RDWR);
     if (_fd < 0) {
-        std::cout << timestamp() << "Failed to open pipe: " << pipe_path << std::endl;
-        return;
+        std::string string_pipe_path(pipe_path);
+        throw std::runtime_error("Failed to open pipe: " + string_pipe_path + " (" + strerror(errno) + ")");
     }
 }
 

@@ -141,6 +141,12 @@ class PairingManager {
   * @param[in]   msg, buffer to be written
   **/
   void write_to_mavlink_router_pipe(const std::string& msg);
+  /**
+  * @brief      print json for debugging purposes
+  * @param[in]  msg, message to be printed together with values
+  * @param[int] val, json value
+  **/
+  static void print_json(const std::string& msg, const Json::Value& val);
   bool unpair_gcs(const std::string& req_body);
   bool connect_gcs(const std::string& req_body, std::string& channel);
   bool disconnect_gcs(const std::string& req_body);

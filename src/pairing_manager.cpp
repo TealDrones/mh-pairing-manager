@@ -331,13 +331,10 @@ std::string PairingManager::get_pairing_json() {
     create_pairing_json_for_taisync(_pairing_val);
   }
   Json::StreamWriterBuilder builder;
-#ifdef UNSECURE_DEBUG
-  std::cout << timestamp() << Json::writeString(builder, _pairing_val) << std::endl;
-#endif
-
   builder["commentStyle"] = "None";
   builder["indentation"] = "";
 
+  print_json("", _pairing_val);
   std::stringstream ss;
   ss << Json::writeString(builder, _pairing_val);
   _pairing_json = _aes.encrypt(ss.str());
@@ -479,11 +476,9 @@ bool PairingManager::verify_request(const std::string& req_body, Json::Value& va
 
 //-----------------------------------------------------------------------------
 std::string PairingManager::pack_response(Json::Value& response) {
+  print_json("Response Json:", response);
+
   Json::StreamWriterBuilder builder;
-#ifdef UNSECURE_DEBUG
-  std::cout << timestamp() << "Response Json:" << std::endl;
-  std::cout << timestamp() << Json::writeString(builder, response) << std::endl;
-#endif
   builder["commentStyle"] = "None";
   builder["indentation"] = "";
   std::stringstream ss;
@@ -517,11 +512,8 @@ bool PairingManager::unpair_gcs(const std::string& req_body) {
     return false;
   }
   std::cout << timestamp() << "Unpair request verification succeeded. " << std::endl;
-#ifdef UNSECURE_DEBUG
-  std::cout << timestamp() << "Unpair Json:" << std::endl;
-  Json::StreamWriterBuilder builder;
-  std::cout << timestamp() << Json::writeString(builder, val) << std::endl;
-#endif
+  print_json("Unpair Json:", val);
+
   std::lock_guard<std::mutex> udp_guard(_udp_mutex);
   _ip = "";
   _port = "";
@@ -564,11 +556,8 @@ bool PairingManager::connect_gcs(const std::string& req_body, std::string& chann
     return false;
   }
   std::cout << timestamp() << "Connection request verification succeeded. " << std::endl;
-#ifdef UNSECURE_DEBUG
-  std::cout << timestamp() << "Connect Json:" << std::endl;
-  Json::StreamWriterBuilder builder;
-  std::cout << timestamp() << Json::writeString(builder, val) << std::endl;
-#endif
+  print_json("Connect Json:", val);
+
   if (!set_channel(val["NID"].asString(), val["CC"].asString(), val["PW"].asString(), val["BW"].asString())) {
     std::cout << timestamp() << "Set channel failed!" << std::endl;
     return false;
@@ -610,11 +599,8 @@ bool PairingManager::disconnect_gcs(const std::string& req_body) {
     return false;
   }
   std::cout << timestamp() << "Disconnect request verification succeeded. " << std::endl;
-#ifdef UNSECURE_DEBUG
-  std::cout << timestamp() << "Disconnect Json:" << std::endl;
-  Json::StreamWriterBuilder builder;
-  std::cout << timestamp() << Json::writeString(builder, val) << std::endl;
-#endif
+  print_json("Disconnect Json:", val);
+
   if (!set_channel(val["NID"].asString(), val["CC"].asString(), val["PW"].asString(), val["BW"].asString())) {
     std::cout << timestamp() << "Set channel failed!" << std::endl;
     return false;
@@ -649,11 +635,8 @@ bool PairingManager::set_channel(const std::string& req_body, Json::Value& val) 
     return false;
   }
   std::cout << timestamp() << "Set channel verification succeeded. " << std::endl;
-#ifdef UNSECURE_DEBUG
-  std::cout << timestamp() << "Set channel Json:" << std::endl;
-  Json::StreamWriterBuilder builder;
-  std::cout << timestamp() << Json::writeString(builder, val) << std::endl;
-#endif
+  print_json("Set channel Json:", val);
+
   if (!set_channel(val["NID"].asString(), val["CC"].asString(), val["PW"].asString(), val["BW"].asString())) {
     std::cout << timestamp() << "Set channel failed!" << std::endl;
     return false;
@@ -662,6 +645,13 @@ bool PairingManager::set_channel(const std::string& req_body, Json::Value& val) 
   return true;
 }
 
+void PairingManager::print_json(const std::string& msg, const Json::Value& val) {
+#ifdef UNSECURE_DEBUG
+  std::cout << timestamp() << msg << std::endl;
+  Json::StreamWriterBuilder builder;
+  std::cout << timestamp() << Json::writeString(builder, val) << std::endl;
+#endif
+}
 //-----------------------------------------------------------------------------
 bool PairingManager::set_channel(const std::string& new_network_id, const std::string& new_ch, const std::string& power,
                                  const std::string& new_bandwidth) {
@@ -709,11 +699,8 @@ bool PairingManager::set_channel(const std::string& new_network_id, const std::s
 
 //-----------------------------------------------------------------------------
 bool PairingManager::write_json_gcs_file(Json::Value& val) {
-  std::cout << timestamp() << "Write Json GCS file:" << std::endl;
+  print_json("Write Json GCS file:", val);
   Json::StreamWriterBuilder builder;
-#ifdef UNSECURE_DEBUG
-  std::cout << timestamp() << Json::writeString(builder, val) << std::endl;
-#endif
   builder["commentStyle"] = "None";
   builder["indentation"] = "";
 

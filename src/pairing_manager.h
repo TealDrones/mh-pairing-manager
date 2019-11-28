@@ -164,4 +164,10 @@ class PairingManager {
   bool verify_request(const std::string& req_body, Json::Value& val);
   std::string pack_response(Json::Value& response);
   std::string get_json_gcs_filename();
+  /**
+  * @brief      converts from json to string
+  * @param[in]  val, json data stucture
+  * @returns    json data in string type
+  **/
+  std::string from_json_to_string(const Json::Value& val);
 };

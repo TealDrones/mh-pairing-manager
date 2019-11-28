@@ -330,14 +330,11 @@ std::string PairingManager::get_pairing_json() {
   } else if (link_type == "TS") {
     create_pairing_json_for_taisync(_pairing_val);
   }
-  Json::StreamWriterBuilder builder;
-  builder["commentStyle"] = "None";
-  builder["indentation"] = "";
 
   print_json("", _pairing_val);
-  std::stringstream ss;
-  ss << Json::writeString(builder, _pairing_val);
-  _pairing_json = _aes.encrypt(ss.str());
+
+  std::string s = from_json_to_string(_pairing_val);
+  _pairing_json = _aes.encrypt(s);
 
   return _pairing_json;
 }
@@ -478,13 +475,7 @@ bool PairingManager::verify_request(const std::string& req_body, Json::Value& va
 std::string PairingManager::pack_response(Json::Value& response) {
   print_json("Response Json:", response);
 
-  Json::StreamWriterBuilder builder;
-  builder["commentStyle"] = "None";
-  builder["indentation"] = "";
-  std::stringstream ss;
-  ss << Json::writeString(builder, response);
-
-  return ss.str();
+  return from_json_to_string(response);
 }
 
 //-----------------------------------------------------------------------------
@@ -652,6 +643,15 @@ void PairingManager::print_json(const std::string& msg, const Json::Value& val) 
   std::cout << timestamp() << Json::writeString(builder, val) << std::endl;
 #endif
 }
+
+std::string PairingManager::from_json_to_string(const Json::Value& val) {
+  Json::StreamWriterBuilder builder;
+  builder["commentStyle"] = "None";
+  builder["indentation"] = "";
+
+  std::stringstream string_stream(Json::writeString(builder, val));
+  return string_stream.str();
+}
 //-----------------------------------------------------------------------------
 bool PairingManager::set_channel(const std::string& new_network_id, const std::string& new_ch, const std::string& power,
                                  const std::string& new_bandwidth) {
@@ -700,13 +700,9 @@ bool PairingManager::set_channel(const std::string& new_network_id, const std::s
 //-----------------------------------------------------------------------------
 bool PairingManager::write_json_gcs_file(Json::Value& val) {
   print_json("Write Json GCS file:", val);
-  Json::StreamWriterBuilder builder;
-  builder["commentStyle"] = "None";
-  builder["indentation"] = "";
 
-  std::stringstream ss;
-  ss << Json::writeString(builder, val);
-  std::string modified_s = _aes.encrypt(ss.str());
+  std::string s = from_json_to_string(val);
+  std::string modified_s = _aes.encrypt(s);
   std::string json_gcs_filename = get_json_gcs_filename();
   std::ofstream out(json_gcs_filename);
   if (!out) {

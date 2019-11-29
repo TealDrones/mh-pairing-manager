@@ -277,13 +277,10 @@ void PairingManager::create_pairing_json_for_microhard(Json::Value& val) {
   bool error = true;
   std::ifstream in(get_json_gcs_filename());
   if (in) {
-    std::stringstream ss;
     Json::Value val_from_json_gcs;
-    Json::CharReaderBuilder jsonReader;
-    std::string errs;
-
-    ss << _aes.decrypt(std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()));
-    if (Json::parseFromStream(jsonReader, ss, &val_from_json_gcs, &errs)) {
+    bool success = decrypt_string_to_json(
+        std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()), val_from_json_gcs);
+    if (success) {
       _rsa.generate_public(val_from_json_gcs["DevPublicKey"].asString());
       _rsa.generate_private(val_from_json_gcs["DevPrivateKey"].asString());
       _gcs_rsa.generate_public(val_from_json_gcs["PublicKey"].asString());
@@ -356,15 +353,9 @@ void PairingManager::create_pairing_json() {
 //-----------------------------------------------------------------------------
 bool PairingManager::create_gcs_pairing_json(const std::string& s, std::string& connect_key, std::string& channel,
                                              std::string& bandwidth, std::string& network_id) {
-  std::stringstream ss1;
-  ss1 << _aes.decrypt(s);
-
   Json::Value val;
-  Json::CharReaderBuilder jsonReader;
-  std::string errs;
-
-  if (!Json::parseFromStream(jsonReader, ss1, &val, &errs)) {
-    std::cout << timestamp() << "Failed to parse" << errs << std::endl;
+  bool success = decrypt_string_to_json(s, val);
+  if (!success) {
     return false;
   }
 
@@ -380,6 +371,19 @@ bool PairingManager::create_gcs_pairing_json(const std::string& s, std::string& 
   val["DevPrivateKey"] = _rsa.get_private_key();
 
   return write_json_gcs_file(val);
+}
+
+bool PairingManager::decrypt_string_to_json(const std::string& in, Json::Value& out) {
+  std::stringstream ss(_aes.decrypt(in));
+  Json::CharReaderBuilder jsonReader;
+  std::string error;
+
+  if (!Json::parseFromStream(jsonReader, ss, &out, &error)) {
+    std::cout << timestamp() << "Failed to parse" << error << std::endl;
+    return false;
+  }
+
+  return true;
 }
 
 //-------------------------------------------------------------------
@@ -668,14 +672,11 @@ bool PairingManager::set_channel(const std::string& new_network_id, const std::s
   if (!in) {
     return false;
   }
-  std::stringstream ss;
-  ss << _aes.decrypt(std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()));
 
   Json::Value val;
-  Json::CharReaderBuilder jsonReader;
-  std::string errs;
-
-  if (!Json::parseFromStream(jsonReader, ss, &val, &errs)) {
+  bool success =
+      decrypt_string_to_json(std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()), val);
+  if (!success) {
     return false;
   }
   val["CC"] = new_ch;

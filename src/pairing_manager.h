@@ -149,6 +149,13 @@ class PairingManager {
   static void print_json(const std::string& msg, const Json::Value& val);
   bool unpair_gcs(const std::string& req_body);
   bool connect_gcs(const std::string& req_body, std::string& channel);
+  /**
+  * @brief      decrypts a string and converts into a json
+  * @param[in]  in, input string
+  * @param[out] out, output json
+  * @returns    true if the conversion into json was successful
+  **/
+  bool decrypt_string_to_json(const std::string& in, Json::Value& out);
   bool disconnect_gcs(const std::string& req_body);
   /**
   * @brief       connects a socket to the vehicle

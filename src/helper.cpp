@@ -97,7 +97,7 @@ void parse_argv(int argc, char* const argv[], PairingManager& pairing_manager) {
         pairing_manager.pairing_encryption_key = optarg;
         break;
       case 's':
-        pairing_manager.pairing_network_id = to_upper(optarg);
+        pairing_manager.pairing_network_id = optarg;
         break;
       case 'f':
         pairing_manager.pairing_channel = optarg;
@@ -170,7 +170,7 @@ void check_env_variables(PairingManager& pairing_manager) {
   }
 
   if (const char* val = std::getenv("PAIRING_MNG_PAIRING_NETWORK_ID")) {
-    pairing_manager.pairing_network_id = to_upper(val);
+    pairing_manager.pairing_network_id = val;
   }
 
   if (const char* val = std::getenv("PAIRING_MNG_PAIRING_CHANNEL")) {

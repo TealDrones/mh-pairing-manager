@@ -32,5 +32,3 @@ std::vector<std::string> split(std::string str, char delimiter);
 std::vector<std::string> scan_ifaces();
 
 bool atoi(char* a, int& val);
-
-std::string to_upper(std::string str);

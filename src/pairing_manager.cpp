@@ -147,7 +147,8 @@ void PairingManager::parse_buffer(std::string& cmd, ConfigMicrohardState& state,
                                   const std::string& config_pwd, const std::string& modem_name,
                                   const std::string& new_modem_ip, const std::string& encryption_key,
                                   const std::string& network_id, const std::string& channel,
-                                  const std::string& bandwidth, const std::string& power) {
+                                  const std::string& bandwidth, const std::string& power,
+                                  bool check_name) {
   std::string logbuf;
   std::string output;
   buffer[n] = 0;
@@ -177,12 +178,22 @@ void PairingManager::parse_buffer(std::string& cmd, ConfigMicrohardState& state,
       state = ConfigMicrohardState::MODEM_NAME;
     } else if (state == ConfigMicrohardState::MODEM_NAME && check_at_result(output)) {
       if (!modem_name.empty()) {
-        cmd = "AT+MSMNAME=" + modem_name + "\n";
+        if (check_name) {
+          cmd = "AT+MSMNAME\n";
+          std::cout << timestamp() << "Checking Microhard name: " << modem_name << std::endl;
+          state = ConfigMicrohardState::MODEM_CHECK_NAME;
+        } else {
+          cmd = "AT+MSMNAME=" + modem_name + "\n";
+          std::cout << timestamp() << "Set Microhard name: " << modem_name << std::endl;
+          state = ConfigMicrohardState::MODEM_IP;
+        }
         output = "";
-        std::cout << timestamp() << "Set Microhard name: " << modem_name << std::endl;
       } else {
         skip = true;
+        state = ConfigMicrohardState::MODEM_IP;
       }
+    } else if (state == ConfigMicrohardState::MODEM_CHECK_NAME && check_at_result_modem_name(output, modem_name)) {
+      skip = true;
       state = ConfigMicrohardState::MODEM_IP;
     } else if (state == ConfigMicrohardState::MODEM_IP && check_at_result(output)) {
       if (!new_modem_ip.empty()) {
@@ -263,8 +274,8 @@ bool PairingManager::configure_microhard_now(
   const std::string& modem_name, const std::string& new_cc_ip,
   const std::string& new_mh_ip, const std::string& encryption_key,
   const std::string& network_id, const std::string& channel,
-  const std::string& bandwidth, const std::string& power) {
-  // End of method declaration
+  const std::string& bandwidth, const std::string& power,
+  bool check_name) {
 
   int retries = 5;
   ConfigMicrohardState state = ConfigMicrohardState::LOGIN;
@@ -304,7 +315,7 @@ bool PairingManager::configure_microhard_now(
             continue;
           }
 
-          parse_buffer(cmd, state, buffer, n, config_pwd, modem_name, new_mh_ip, encryption_key, network_id, channel, bandwidth, power);
+          parse_buffer(cmd, state, buffer, n, config_pwd, modem_name, new_mh_ip, encryption_key, network_id, channel, bandwidth, power, check_name);
 
           if (state_prev != state && !cmd.empty()) {
             send(sock, cmd.c_str(), cmd.length(), 0);
@@ -357,7 +368,7 @@ void PairingManager::configure_microhard(const std::string& air_ip, const std::s
   for (int i = connect_ip_range_start; i<=connect_ip_range_end; i++) {
     std::string trial_ip = ip_prefix + "." + std::to_string(i);
     if (trial_ip != air_unit_ip) {
-      if (configure_microhard_now(trial_ip, config_pwd, modem_name, new_cc_ip, new_mh_ip, encryption_key, network_id, channel, bandwidth, power)) {
+      if (configure_microhard_now(trial_ip, config_pwd, modem_name, new_cc_ip, new_mh_ip, encryption_key, network_id, channel, bandwidth, power, true)) {
         return;
       }
     }
@@ -370,6 +381,11 @@ void PairingManager::configure_microhard(const std::string& air_ip, const std::s
 //-----------------------------------------------------------------------------
 bool PairingManager::check_at_result(const std::string& output) {
   return (output.find("OK") != std::string::npos || output.find("ERROR:") != std::string::npos);
+}
+
+//-----------------------------------------------------------------------------
+bool PairingManager::check_at_result_modem_name(const std::string& output, const std::string& name) {
+  return (output.find("OK") != std::string::npos && output.find("Host name:" + name) != std::string::npos);
 }
 
 //-----------------------------------------------------------------------------
@@ -453,7 +469,7 @@ void PairingManager::create_pairing_val_for_microhard(Json::Value& val) {
   }
 
   configure_microhard(val["MHIP"].asString(), val["CP"].asString(),
-                      "", val["CCIP"].asString(), "",
+                      machine_name, val["CCIP"].asString(), "",
                       val["EK"].asString(), val["NID"].asString(),
                       val["CC"].asString(), val["BW"].asString(), val["PW"].asString());
 }
@@ -581,7 +597,7 @@ std::string PairingManager::pair_gcs_request(const std::string& req_body) {
     std::thread([this, cc_ip, mh_ip, connect_key, network_id, channel, bandwidth]() {
       std::this_thread::sleep_for(100ms);
       configure_microhard(air_unit_ip, _pairing_val["CP"].asString(),
-                          "", cc_ip, mh_ip,
+                          machine_name, cc_ip, mh_ip,
                           connect_key, network_id, channel,
                           bandwidth, default_transmit_power);
     }).detach();
@@ -836,8 +852,8 @@ bool PairingManager::set_channel(const std::string& new_network_id, const std::s
   std::thread([this, connect_key, mhip, new_network_id, new_ch, new_bandwidth, power]() {
     std::this_thread::sleep_for(100ms);
     std::cout << "Setting channel: " << new_ch << " Power: " << power << " Network ID: " << new_network_id << std::endl;
-    configure_microhard(mhip, _pairing_val["CP"].asString(),
-                        "", "", "",
+    configure_microhard(_pairing_val["MHIP"].asString(), _pairing_val["CP"].asString(),
+                        machine_name, "", "",
                         connect_key, new_network_id,
                         new_ch, new_bandwidth, power);
   }).detach();
@@ -877,7 +893,7 @@ bool PairingManager::handlePairingCommand() {
   auto now = std::chrono::steady_clock::now();
 
   if (!_pairing_mode ||
-      std::chrono::duration_cast<std::chrono::milliseconds>(now - _last_pairing_time_stamp).count() > 3000) {
+      std::chrono::duration_cast<std::chrono::milliseconds>(now - _last_pairing_time_stamp).count() > 5000) {
     _pairing_mode = true;
     _last_pairing_time_stamp = now;
     _pairing_mutex.unlock();
@@ -886,10 +902,12 @@ bool PairingManager::handlePairingCommand() {
       _ip = "";
       _port = "";
       remove_endpoint("gcs");
-      configure_microhard(_pairing_val["MHIP"].asString(), _pairing_val["CP"].asString(),
-                          machine_name, pairing_cc_ip, air_unit_ip,
-                          pairing_encryption_key, pairing_network_id,
-                          pairing_channel, default_pairing_bandwidth, default_transmit_power);
+      std::thread([this]() {
+          configure_microhard(_pairing_val["MHIP"].asString(), _pairing_val["CP"].asString(),
+                              machine_name, pairing_cc_ip, air_unit_ip,
+                              pairing_encryption_key, pairing_network_id,
+                              pairing_channel, default_pairing_bandwidth, default_transmit_power);
+      }).detach();
       result = true;
     }
   } else {

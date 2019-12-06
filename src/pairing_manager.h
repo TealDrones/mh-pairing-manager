@@ -56,6 +56,7 @@ enum class ConfigMicrohardState {
   PASSWORD,
   CRYPTO_KEY,
   MODEM_NAME,
+  MODEM_CHECK_NAME,
   MODEM_IP,
   POWER,
   FREQUENCY,
@@ -116,7 +117,7 @@ class PairingManager {
                            const std::string& config_pwd, const std::string& modem_name,
                            const std::string& new_modem_ip, const std::string& encryption_key,
                            const std::string& network_id, const std::string& channel, const std::string& bandwidth,
-                           const std::string& power);
+                           const std::string& power, bool check_name = false);
 
   /**
   * @brief       parses the the microhard radio response to an AT command
@@ -124,6 +125,13 @@ class PairingManager {
   * @returns     true if the AT command succeeded
   **/
   static bool check_at_result(const std::string& output);
+
+  /**
+  * @brief       parses the the microhard radio response to an AT command for getting modem name
+  * @param[in]   output, string containing the microhard response
+  * @returns     true if the name matches
+  **/
+  static bool check_at_result_modem_name(const std::string& output, const std::string& name);
 
   /**
   * @brief       prints the microhard response to AT commands for debugging purposes
@@ -156,7 +164,8 @@ class PairingManager {
                            const std::string& modem_name, const std::string& new_cc_ip,
                            const std::string& new_mh_ip, const std::string& encryption_key,
                            const std::string& network_id, const std::string& channel,
-                           const std::string& bandwidth, const std::string& power);
+                           const std::string& bandwidth, const std::string& power,
+                           bool check_name = false);
   void configure_microhard(const std::string& air_ip, const std::string& config_pwd,
                            const std::string& modem_name, const std::string& new_cc_ip,
                            const std::string& new_mh_ip, const std::string& encryption_key,

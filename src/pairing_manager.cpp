@@ -50,9 +50,11 @@ using namespace std::chrono_literals;
 
 const int random_aes_key_length = 8;
 const int microhard_settings_port = 23;
-const char* json_filename = "temp_pairing.json";
+const int connect_ip_range_start = 20;
+const int connect_ip_range_end = 29;
 const char* json_gcs_filename = "pairing.json";
 const char* pipe_path = "/tmp/mavlink_router_pipe";
+const std::string modem_netmask = "255.255.255.0";
 
 //-----------------------------------------------------------------------------
 PairingManager::PairingManager() : _aes() {
@@ -75,7 +77,7 @@ bool PairingManager::init() {
   }
 
   _aes.init(pairing_encryption_key);
-  create_pairing_json();
+  create_pairing_val();
 
   std::thread([this]() {
     while (true) {
@@ -142,7 +144,8 @@ void PairingManager::print_microhard_buffer_debug(std::string& logbuf) {
 }
 
 void PairingManager::parse_buffer(std::string& cmd, ConfigMicrohardState& state, char* buffer, int n,
-                                  const std::string& config_pwd, const std::string& encryption_key,
+                                  const std::string& config_pwd, const std::string& modem_name,
+                                  const std::string& new_modem_ip, const std::string& encryption_key,
                                   const std::string& network_id, const std::string& channel,
                                   const std::string& bandwidth, const std::string& power) {
   std::string logbuf;
@@ -150,52 +153,75 @@ void PairingManager::parse_buffer(std::string& cmd, ConfigMicrohardState& state,
   buffer[n] = 0;
   output += buffer;
   logbuf += buffer;
+  cmd = "";
 #ifdef UNSECURE_DEBUG
   print_microhard_buffer_debug(logbuf);
 #endif
+  bool skip;
 
-  if (state == ConfigMicrohardState::LOGIN && output.find("login:") != std::string::npos) {
-    state = ConfigMicrohardState::PASSWORD;
-    cmd = "admin\n";
-  } else if (state == ConfigMicrohardState::PASSWORD && output.find("Password:") != std::string::npos) {
-    state = ConfigMicrohardState::CRYPTO_KEY;
-    cmd = config_pwd + "\n";
-  } else if (state == ConfigMicrohardState::CRYPTO_KEY && output.find("Entering") != std::string::npos) {
-    if (!encryption_key.empty()) {
-      cmd = "AT+MWVENCRYPT=1," + encryption_key + "\n";
-    } else {
-      cmd = "AT+MWVENCRYPT=0\n";
+  do {
+    skip = false;
+    if (state == ConfigMicrohardState::LOGIN && output.find("login:") != std::string::npos) {
+      state = ConfigMicrohardState::PASSWORD;
+      cmd = "admin\n";
+    } else if (state == ConfigMicrohardState::PASSWORD && output.find("Password:") != std::string::npos) {
+      state = ConfigMicrohardState::CRYPTO_KEY;
+      cmd = config_pwd + "\n";
+    } else if (state == ConfigMicrohardState::CRYPTO_KEY && output.find("Entering") != std::string::npos) {
+      if (!encryption_key.empty()) {
+        cmd = "AT+MWVENCRYPT=1," + encryption_key + "\n";
+      } else {
+        cmd = "AT+MWVENCRYPT=0\n";
+      }
+      output = "";
+      state = ConfigMicrohardState::MODEM_NAME;
+    } else if (state == ConfigMicrohardState::MODEM_NAME && check_at_result(output)) {
+      if (!modem_name.empty()) {
+        cmd = "AT+MSMNAME=" + modem_name + "\n";
+        output = "";
+        std::cout << timestamp() << "Set Microhard name: " << modem_name << std::endl;
+      } else {
+        skip = true;
+      }
+      state = ConfigMicrohardState::MODEM_IP;
+    } else if (state == ConfigMicrohardState::MODEM_IP && check_at_result(output)) {
+      if (!new_modem_ip.empty()) {
+        cmd = "AT+MNLAN=lan,EDIT,0," + new_modem_ip + "," + modem_netmask + "\n";
+        output = "";
+        std::cout << timestamp() << "Set Microhard IP: " << new_modem_ip << std::endl;
+      } else {
+        skip = true;
+      }
+      state = ConfigMicrohardState::POWER;
+    } else if (state == ConfigMicrohardState::POWER && check_at_result(output)) {
+      cmd = "AT+MWTXPOWER=" + power + "\n";
+      output = "";
+      state = ConfigMicrohardState::FREQUENCY;
+    } else if (state == ConfigMicrohardState::FREQUENCY && check_at_result(output)) {
+      cmd = "AT+MWFREQ=" + channel + "\n";
+      output = "";
+      std::cout << timestamp() << "Set Microhard channel: " << channel << std::endl;
+      state = ConfigMicrohardState::BANDWIDTH;
+    } else if (state == ConfigMicrohardState::BANDWIDTH && check_at_result(output)) {
+      cmd = "AT+MWBAND=" + bandwidth + "\n";
+      output = "";
+      std::cout << timestamp() << "Set Microhard bandwidth: " << bandwidth << std::endl;
+      state = ConfigMicrohardState::NETWORK_ID;
+    } else if (state == ConfigMicrohardState::NETWORK_ID && check_at_result(output)) {
+      cmd = "AT+MWNETWORKID=" + network_id + "\n";
+      output = "";
+      std::cout << timestamp() << "Set Microhard network Id: " << network_id << std::endl;
+      state = ConfigMicrohardState::SAVE;
+    } else if (state == ConfigMicrohardState::SAVE && check_at_result(output)) {
+      cmd = std::string("AT&W\n");
+  #ifdef UNSECURE_DEBUG
+      std::cout << timestamp() << "Set Microhard encryption key: " << encryption_key << std::endl;
+  #else
+      std::cout << timestamp() << "Set Microhard encryption key." << std::endl;
+  #endif
+      state = ConfigMicrohardState::DONE;
     }
-    output = "";
-    state = ConfigMicrohardState::POWER;
-  } else if (state == ConfigMicrohardState::POWER && check_at_result(output)) {
-    cmd = "AT+MWTXPOWER=" + power + "\n";
-    output = "";
-    state = ConfigMicrohardState::FREQUENCY;
-  } else if (state == ConfigMicrohardState::FREQUENCY && check_at_result(output)) {
-    cmd = "AT+MWFREQ=" + channel + "\n";
-    output = "";
-    std::cout << timestamp() << "Set Microhard channel: " << channel << std::endl;
-    state = ConfigMicrohardState::BANDWIDTH;
-  } else if (state == ConfigMicrohardState::BANDWIDTH && check_at_result(output)) {
-    cmd = "AT+MWBAND=" + bandwidth + "\n";
-    output = "";
-    std::cout << timestamp() << "Set Microhard bandwidth: " << bandwidth << std::endl;
-    state = ConfigMicrohardState::NETWORK_ID;
-  } else if (state == ConfigMicrohardState::NETWORK_ID && check_at_result(output)) {
-    cmd = "AT+MWNETWORKID=" + network_id + "\n";
-    output = "";
-    std::cout << timestamp() << "Set Microhard network Id: " << network_id << std::endl;
-    state = ConfigMicrohardState::SAVE;
-  } else if (state == ConfigMicrohardState::SAVE && check_at_result(output)) {
-    cmd = std::string("AT&W\n");
-#ifdef UNSECURE_DEBUG
-    std::cout << timestamp() << "Set Microhard encryption key: " << encryption_key << std::endl;
-#else
-    std::cout << timestamp() << "Set Microhard encryption key." << std::endl;
-#endif
-    state = ConfigMicrohardState::DONE;
-  }
+  } while (skip);
 }
 
 bool PairingManager::is_socket_connected(const int& sock, const std::string& air_ip) {
@@ -225,24 +251,38 @@ bool PairingManager::is_socket_connected(const int& sock, const std::string& air
   return false;
 }
 
-void PairingManager::configure_microhard(const std::string& air_ip, const std::string& config_pwd,
-                                         const std::string& encryption_key, const std::string& network_id,
-                                         const std::string& channel, const std::string& bandwidth,
-                                         const std::string& power) {
-  std::lock_guard<std::mutex> guard(_mh_mutex);
+void PairingManager::configure_microhard_network_interface(const std::string& ip) {
+  std::string cmd = "ifconfig " + ethernet_device + " " + ip;
+  std::cout << timestamp() << "Configure microhard network interface: " << cmd << std::endl;
+  exec(cmd.c_str());
+  _pairing_val["CCIP"] = ip;
+}
+
+bool PairingManager::configure_microhard_now(
+  const std::string& air_ip, const std::string& config_pwd,
+  const std::string& modem_name, const std::string& new_cc_ip,
+  const std::string& new_mh_ip, const std::string& encryption_key,
+  const std::string& network_id, const std::string& channel,
+  const std::string& bandwidth, const std::string& power) {
+  // End of method declaration
+
   int retries = 5;
   ConfigMicrohardState state = ConfigMicrohardState::LOGIN;
 
   if (config_pwd == "") {
     std::cout << timestamp() << "Microhard config password not set." << std::endl;
-    return;
+    return false;
+  }
+
+  if (!new_cc_ip.empty()) {
+    configure_microhard_network_interface(new_cc_ip);
   }
 
   while (retries > 0 && (state != ConfigMicrohardState::DONE)) {
-    std::cout << timestamp() << "Configure microhard." << std::endl;
+    std::cout << timestamp() << "Configure microhard " << air_ip << std::endl;
 
     state = ConfigMicrohardState::LOGIN;
-    ConfigMicrohardState state_prev = ConfigMicrohardState::NONE;
+    ConfigMicrohardState state_prev = state;
 
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock >= 0) {
@@ -253,7 +293,7 @@ void PairingManager::configure_microhard(const std::string& air_ip, const std::s
         auto start_time = std::chrono::steady_clock::now();
         while (true) {
           auto end_time = std::chrono::steady_clock::now();
-          if (std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() > 5000) {
+          if (std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() > 10000) {
             std::cout << timestamp() << "Microhard configuration timeout." << std::endl;
             break;
           }
@@ -264,11 +304,12 @@ void PairingManager::configure_microhard(const std::string& air_ip, const std::s
             continue;
           }
 
-          parse_buffer(cmd, state, buffer, n, config_pwd, encryption_key, network_id, channel, bandwidth, power);
+          parse_buffer(cmd, state, buffer, n, config_pwd, modem_name, new_mh_ip, encryption_key, network_id, channel, bandwidth, power);
 
-          if (state_prev != state) {
+          if (state_prev != state && !cmd.empty()) {
             send(sock, cmd.c_str(), cmd.length(), 0);
           }
+
           state_prev = state;
 
           if (state == ConfigMicrohardState::DONE) {
@@ -282,12 +323,48 @@ void PairingManager::configure_microhard(const std::string& air_ip, const std::s
     }
   }
   if (state != ConfigMicrohardState::DONE) {
-    std::cout << timestamp() << "Could not configure Microhard modem. Exiting ..." << std::endl;
-    std::this_thread::sleep_for(3s);
-    quit();
+    std::cout << timestamp() << "Could not configure Microhard modem." << std::endl;
+    return false;
   }
 
-  _get_status_initialized = false;
+  if (!new_mh_ip.empty()) {
+    _pairing_val["MHIP"] = new_mh_ip;
+  }
+
+  return true;
+}
+
+//-----------------------------------------------------------------------------
+void PairingManager::configure_microhard(const std::string& air_ip, const std::string& config_pwd,
+                                         const std::string& modem_name, const std::string& new_cc_ip,
+                                         const std::string& new_mh_ip, const std::string& encryption_key,
+                                         const std::string& network_id, const std::string& channel,
+                                         const std::string& bandwidth, const std::string& power) {
+  std::lock_guard<std::mutex> guard(_mh_mutex);
+
+  if (!air_ip.empty()) {
+    if (configure_microhard_now(air_ip, config_pwd, modem_name, new_cc_ip, new_mh_ip, encryption_key, network_id, channel, bandwidth, power)) {
+      return;
+    }
+  }
+
+  if (air_ip != air_unit_ip) {
+    if (configure_microhard_now(air_unit_ip, config_pwd, modem_name, new_cc_ip, new_mh_ip, encryption_key, network_id, channel, bandwidth, power)) {
+      return;
+    }
+  }
+
+  for (int i = connect_ip_range_start; i<=connect_ip_range_end; i++) {
+    std::string trial_ip = ip_prefix + "." + std::to_string(i);
+    if (trial_ip != air_unit_ip) {
+      if (configure_microhard_now(trial_ip, config_pwd, modem_name, new_cc_ip, new_mh_ip, encryption_key, network_id, channel, bandwidth, power)) {
+        return;
+      }
+    }
+  }
+
+  std::this_thread::sleep_for(3s);
+  quit();
 }
 
 //-----------------------------------------------------------------------------
@@ -297,12 +374,14 @@ bool PairingManager::check_at_result(const std::string& output) {
 
 //-----------------------------------------------------------------------------
 void PairingManager::reconfigure_microhard() {
-  configure_microhard(_pairing_val["AIP"].asString(), _pairing_val["CP"].asString(), _pairing_val["EK"].asString(),
-                      pairing_network_id, pairing_channel, _pairing_val["BW"].asString(), default_transmit_power);
+  configure_microhard(_pairing_val["MHIP"].asString(), _pairing_val["CP"].asString(),
+                      machine_name, pairing_cc_ip, air_unit_ip,
+                      _pairing_val["EK"].asString(), pairing_network_id,
+                      pairing_channel, _pairing_val["BW"].asString(), default_transmit_power);
 }
 
 //-----------------------------------------------------------------------------
-void PairingManager::create_pairing_json_for_zerotier(Json::Value& val) {
+void PairingManager::create_pairing_val_for_zerotier(Json::Value& val) {
   val["ZTID"] = zerotier_id;
   std::string zt = exec("zerotier-cli listnetworks");
   std::cout << timestamp() << "ZeroTier networks: " << std::endl << zt << std::endl;
@@ -320,7 +399,7 @@ void PairingManager::create_pairing_json_for_zerotier(Json::Value& val) {
 }
 
 //-----------------------------------------------------------------------------
-void PairingManager::create_pairing_json_for_microhard(Json::Value& val) {
+void PairingManager::create_pairing_val_for_microhard(Json::Value& val) {
   for (auto i : scan_ifaces()) {
     if (i.find(ip_prefix.c_str()) != std::string::npos) {
       val["IP"] = i;
@@ -328,10 +407,11 @@ void PairingManager::create_pairing_json_for_microhard(Json::Value& val) {
     }
   }
 
-  val["AIP"] = air_unit_ip;
   val["CP"] = config_password;
   val["BW"] = default_pairing_bandwidth;
   val["PW"] = default_transmit_power;
+  val["CCIP"] = pairing_cc_ip;
+  val["MHIP"] = air_unit_ip;
 
   bool error = true;
   std::ifstream in(get_json_gcs_filename());
@@ -344,11 +424,22 @@ void PairingManager::create_pairing_json_for_microhard(Json::Value& val) {
       _rsa.generate_private(val_from_json_gcs["DevPrivateKey"].asString());
       _gcs_rsa.generate_public(val_from_json_gcs["PublicKey"].asString());
 
+      auto v = val_from_json_gcs["CCIP"].asString();
+      if (!v.empty()) {
+        val["CCIP"] = v;
+      }
+      v = val_from_json_gcs["MHIP"].asString();
+      if (!v.empty()) {
+        val["MHIP"] = v;
+      }
+      v = val_from_json_gcs["BW"].asString();
+      if (!v.empty()) {
+        val["BW"] = v;
+      }
       val["EK"] = val_from_json_gcs["EK"];
       val["CC"] = val_from_json_gcs["CC"];
       val["NID"] = val_from_json_gcs["NID"];
       val["PW"] = val_from_json_gcs["PW"];
-      val["BW"] = val_from_json_gcs["BW"];
 
       error = false;
     }
@@ -361,56 +452,37 @@ void PairingManager::create_pairing_json_for_microhard(Json::Value& val) {
     val["PW"] = default_transmit_power;
   }
 
-  configure_microhard(val["AIP"].asString(), val["CP"].asString(), val["EK"].asString(), val["NID"].asString(),
+  configure_microhard(val["MHIP"].asString(), val["CP"].asString(),
+                      "", val["CCIP"].asString(), "",
+                      val["EK"].asString(), val["NID"].asString(),
                       val["CC"].asString(), val["BW"].asString(), val["PW"].asString());
 }
 
 //-----------------------------------------------------------------------------
-void PairingManager::create_pairing_json_for_taisync(Json::Value& val) {
+void PairingManager::create_pairing_val_for_taisync(Json::Value& val) {
   std::string cmd = std::string("ifconfig ") + ethernet_device + " 192.168.0.2 up";
   exec(cmd.c_str());
 }
 
 //-----------------------------------------------------------------------------
-std::string PairingManager::get_pairing_json() {
-  if (!_pairing_json.empty()) {
-    return _pairing_json;
-  }
-
+void PairingManager::create_pairing_val() {
   _pairing_val["LT"] = link_type;
   _pairing_val["PP"] = pairing_port;
   if (link_type == "ZT") {
-    create_pairing_json_for_zerotier(_pairing_val);
+    create_pairing_val_for_zerotier(_pairing_val);
   } else if (link_type == "MH") {
-    create_pairing_json_for_microhard(_pairing_val);
+    create_pairing_val_for_microhard(_pairing_val);
   } else if (link_type == "TS") {
-    create_pairing_json_for_taisync(_pairing_val);
+    create_pairing_val_for_taisync(_pairing_val);
   }
 
   print_json("", _pairing_val);
-
-  std::string s = from_json_to_string(_pairing_val);
-  _pairing_json = _aes.encrypt(s);
-
-  return _pairing_json;
 }
 
 //-----------------------------------------------------------------------------
-void PairingManager::create_pairing_json() {
-  std::ofstream out(json_filename);
-  if (!out) {
-    std::cout << timestamp() << "Failed to open " << json_filename << " for writing" << std::endl;
-    return;
-  }
-  out << get_pairing_json();
-  if (out.bad()) {
-    std::cout << timestamp() << "Failed to write to file " << json_filename << std::endl;
-  }
-  out.close();
-}
-
-//-----------------------------------------------------------------------------
-bool PairingManager::create_gcs_pairing_json(const std::string& s, std::string& connect_key, std::string& channel,
+bool PairingManager::create_gcs_pairing_json(const std::string& s,
+                                             std::string& cc_ip, std::string& mh_ip,
+                                             std::string& connect_key, std::string& channel,
                                              std::string& bandwidth, std::string& network_id) {
   Json::Value val;
   bool success = decrypt_string_to_json(s, val);
@@ -418,6 +490,8 @@ bool PairingManager::create_gcs_pairing_json(const std::string& s, std::string& 
     return false;
   }
 
+  cc_ip = val["CCIP"].asString();
+  mh_ip = val["MHIP"].asString();
   connect_key = val["EK"].asString();
   channel = val["CC"].asString();
   bandwidth = val["BW"].asString();
@@ -482,6 +556,8 @@ void PairingManager::open_udp_endpoint(const std::string& ip, const std::string&
 
 //-----------------------------------------------------------------------------
 std::string PairingManager::pair_gcs_request(const std::string& req_body) {
+  std::string cc_ip;
+  std::string mh_ip;
   std::string connect_key;
   std::string channel;
   std::string bandwidth;
@@ -490,24 +566,32 @@ std::string PairingManager::pair_gcs_request(const std::string& req_body) {
   val["CMD"] = "pair";
   val["NM"] = machine_name;
 
-  if (create_gcs_pairing_json(req_body, connect_key, channel, bandwidth, network_id) && connect_key != "" &&
-      channel != "" && network_id != "") {
-    std::cout << timestamp() << "Got connect key"
+  if (create_gcs_pairing_json(req_body, cc_ip, mh_ip, connect_key, channel, bandwidth, network_id) &&
+      cc_ip != "" && mh_ip != "" && connect_key != "" && channel != "" && network_id != "") {
+    std::cout << timestamp() << "Got CC IP: " << cc_ip << ", MH IP: " << mh_ip << ", connect key"
 #ifdef UNSECURE_DEBUG
               << ": " << connect_key
 #endif
-              << " and channel: " << channel << " and bandwidth: " << bandwidth << " and network id: " << network_id
+              << ", channel: " << channel << ", bandwidth: " << bandwidth << ", network id: " << network_id
               << std::endl;
     std::lock_guard<std::mutex> guard(_pairing_mutex);
     _pairing_mode = false;
-    configure_microhard(_pairing_val["AIP"].asString(), _pairing_val["CP"].asString(), connect_key, network_id, channel,
-                        bandwidth, default_transmit_power);
+
+    // Change modem parameters after the response was sent
+    std::thread([this, cc_ip, mh_ip, connect_key, network_id, channel, bandwidth]() {
+      std::this_thread::sleep_for(100ms);
+      configure_microhard(air_unit_ip, _pairing_val["CP"].asString(),
+                          "", cc_ip, mh_ip,
+                          connect_key, network_id, channel,
+                          bandwidth, default_transmit_power);
+    }).detach();
+    val["IP"] = cc_ip;
     val["CC"] = channel;
     val["NID"] = network_id;
     val["RES"] = "accepted";
     val["PublicKey"] = _rsa.get_public_key();
   } else {
-    std::cout << timestamp() << "Did not get the connect key" << std::endl;
+    std::cout << timestamp() << "Did not get all required parameters" << std::endl;
     val["RES"] = "rejected";
   }
   std::string message = pack_response(val);
@@ -742,15 +826,19 @@ bool PairingManager::set_channel(const std::string& new_network_id, const std::s
   val["PW"] = power;
   val["NID"] = new_network_id;
   std::string connect_key = val["EK"].asString();
+  std::string mhip = val["MHIP"].asString();
 
   if (!write_json_gcs_file(val)) {
     return false;
   }
 
-  std::thread([this, connect_key, new_network_id, new_ch, new_bandwidth, power]() {
+  // Change modem parameters after the response was sent
+  std::thread([this, connect_key, mhip, new_network_id, new_ch, new_bandwidth, power]() {
     std::this_thread::sleep_for(100ms);
     std::cout << "Setting channel: " << new_ch << " Power: " << power << " Network ID: " << new_network_id << std::endl;
-    configure_microhard(_pairing_val["AIP"].asString(), _pairing_val["CP"].asString(), connect_key, new_network_id,
+    configure_microhard(mhip, _pairing_val["CP"].asString(),
+                        "", "", "",
+                        connect_key, new_network_id,
                         new_ch, new_bandwidth, power);
   }).detach();
 
@@ -798,8 +886,10 @@ bool PairingManager::handlePairingCommand() {
       _ip = "";
       _port = "";
       remove_endpoint("gcs");
-      configure_microhard(_pairing_val["AIP"].asString(), _pairing_val["CP"].asString(), pairing_encryption_key,
-                          pairing_network_id, pairing_channel, default_pairing_bandwidth, default_transmit_power);
+      configure_microhard(_pairing_val["MHIP"].asString(), _pairing_val["CP"].asString(),
+                          machine_name, pairing_cc_ip, air_unit_ip,
+                          pairing_encryption_key, pairing_network_id,
+                          pairing_channel, default_pairing_bandwidth, default_transmit_power);
       result = true;
     }
   } else {

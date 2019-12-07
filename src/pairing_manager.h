@@ -63,6 +63,7 @@ enum class ConfigMicrohardState {
   BANDWIDTH,
   NETWORK_ID,
   SAVE,
+  END,
   DONE,
   GET_STATUS,
   READ_STATUS,
@@ -161,7 +162,7 @@ class PairingManager {
 
   void configure_microhard_network_interface(const std::string& ip);
   bool configure_microhard_now(const std::string& air_ip, const std::string& config_pwd,
-                           const std::string& modem_name, const std::string& new_cc_ip,
+                           const std::string& modem_name, 
                            const std::string& new_mh_ip, const std::string& encryption_key,
                            const std::string& network_id, const std::string& channel,
                            const std::string& bandwidth, const std::string& power,

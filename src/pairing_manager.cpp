@@ -261,10 +261,24 @@ bool PairingManager::is_socket_connected(const int& sock, const std::string& air
 }
 
 void PairingManager::configure_microhard_network_interface(const std::string& ip) {
-  std::string cmd = "ifconfig " + ethernet_device + " " + ip;
-  std::cout << timestamp() << "Configure microhard network interface: " << cmd << std::endl;
-  exec(cmd.c_str());
-  _pairing_val["CCIP"] = ip;
+  std::string current_ip = "";
+  for (auto i : scan_ifaces()) {
+    if (i.find(ip_prefix.c_str()) != std::string::npos) {
+      current_ip = i;
+      break;
+    }
+  }
+
+  if (current_ip != ip) {
+    std::cout << timestamp() << "Configure microhard network interface " << ethernet_device << " " << current_ip << std::endl;
+    std::string cmd = "ifconfig " + ethernet_device + " down";
+    std::cout << cmd << std::endl;
+    exec(cmd.c_str());
+    cmd = "ifconfig " + ethernet_device + " " + ip + " up";
+    std::cout << cmd << std::endl;
+    exec(cmd.c_str());
+    _pairing_val["CCIP"] = ip;
+  }
 }
 
 bool PairingManager::configure_microhard_now(
@@ -301,7 +315,7 @@ bool PairingManager::configure_microhard_now(
       auto start_time = std::chrono::steady_clock::now();
       while (true) {
         auto end_time = std::chrono::steady_clock::now();
-        if (std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() > 4000) {
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() > 6000) {
           std::cout << timestamp() << "Microhard configuration timeout." << std::endl;
           timeout = true;
           break;

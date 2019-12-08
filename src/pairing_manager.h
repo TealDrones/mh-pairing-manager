@@ -63,7 +63,6 @@ enum class ConfigMicrohardState {
   BANDWIDTH,
   NETWORK_ID,
   SAVE,
-  END,
   DONE,
   GET_STATUS,
   READ_STATUS,

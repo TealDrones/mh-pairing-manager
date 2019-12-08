@@ -225,9 +225,6 @@ void PairingManager::parse_buffer(std::string& cmd, ConfigMicrohardState& state,
       state = ConfigMicrohardState::SAVE;
     } else if (state == ConfigMicrohardState::SAVE && check_at_result(output)) {
       cmd = std::string("AT&W\n");
-      state = ConfigMicrohardState::END;
-    } else if (state == ConfigMicrohardState::END && check_at_result(output)) {
-      cmd = "";
       state = ConfigMicrohardState::DONE;
     }
   } while (skip);
@@ -271,10 +268,9 @@ void PairingManager::configure_microhard_network_interface(const std::string& ip
 
   if (current_ip != ip) {
     std::cout << timestamp() << "Configure microhard network interface " << ethernet_device << " " << current_ip << std::endl;
-    std::string cmd = "ifconfig " + ethernet_device + " down";
-    std::cout << cmd << std::endl;
-    exec(cmd.c_str());
-    cmd = "ifconfig " + ethernet_device + " " + ip + " up";
+    std::string cmd = "ifconfig " + ethernet_device + " down;";
+    cmd += "sleep 2;";
+    cmd += "ifconfig " + ethernet_device + " " + ip + " up";
     std::cout << cmd << std::endl;
     exec(cmd.c_str());
     _pairing_val["CCIP"] = ip;
@@ -362,41 +358,37 @@ void PairingManager::configure_microhard(const std::string& air_ip, const std::s
                                          const std::string& new_mh_ip, const std::string& encryption_key,
                                          const std::string& network_id, const std::string& channel,
                                          const std::string& bandwidth, const std::string& power) {
-  bool result = false;
   std::lock_guard<std::mutex> guard(_mh_mutex);
+  std::vector<std::string> trial_list;
 
-  if (!air_ip.empty()) {
-    for (int i = 0; i<5 && !result; i++) {
-      if (configure_microhard_now(air_ip, config_pwd, modem_name, new_mh_ip, encryption_key, network_id, channel, bandwidth, power)) {
-        result = true;
-      }
-    }
-  }
-
-  if (!result && air_ip != air_unit_ip) {
-    if (configure_microhard_now(air_unit_ip, config_pwd, modem_name, new_mh_ip, encryption_key, network_id, channel, bandwidth, power)) {
-        result = true;
-    }
-  }
-
-  for (int i = 0; i < max_num_of_devices && !result; i++) {
+  for (int i = 0; i < max_num_of_devices; i++) {
     std::string trial_ip = ip_prefix + "." + std::to_string(i + connect_mh_ip_start);
     if (trial_ip != air_ip) {
-      if (configure_microhard_now(trial_ip, config_pwd, modem_name, new_mh_ip, encryption_key, network_id, channel, bandwidth, power, true)) {
-        result = true;
+      trial_list.push_back(air_ip);
+      if (air_ip != air_unit_ip) {
+        trial_list.push_back(air_unit_ip);
       }
+      trial_list.push_back(trial_ip);
     }
   }
 
-  if (result) {
-    if (!new_cc_ip.empty()) {
-      configure_microhard_network_interface(new_cc_ip);
+  for (auto i = trial_list.begin(); i != trial_list.end(); i++) {
+    std::cout << timestamp() << "Pinging " << air_unit_ip << std::endl;
+    if (can_ping(*i, 1)) {
+      if (configure_microhard_now(*i, config_pwd, modem_name, new_mh_ip, encryption_key, network_id, channel, bandwidth, power, *i != air_unit_ip)) {
+        if (!new_cc_ip.empty()) {
+          configure_microhard_network_interface(new_cc_ip);
+        }
+        return;
+      }
+    } else {
+      std::cout << timestamp() << "Could not ping " << air_unit_ip << std::endl;
     }
-  } else {
-    std::cout << timestamp() << "Could not configure Microhard modem. Exiting." << std::endl;
-    std::this_thread::sleep_for(3s);
-    quit();
   }
+
+  std::cout << timestamp() << "Could not configure Microhard modem. Exiting." << std::endl;
+  std::this_thread::sleep_for(3s);
+  quit();
 }
 
 //-----------------------------------------------------------------------------

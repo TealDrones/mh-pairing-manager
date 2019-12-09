@@ -41,6 +41,7 @@ class MAVLinkHandler {
   void send_mavlink_message(const mavlink_message_t* message, struct sockaddr* srcaddr = nullptr);
   void send_cmd_ack(uint8_t target_sysid, uint8_t target_compid, uint16_t cmd, unsigned char result,
                     struct sockaddr* srcaddr);
+  void send_radio_status(uint8_t rssi);
   void run();
   uint8_t sysID() { return _sysID; }
 

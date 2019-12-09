@@ -71,6 +71,26 @@ bool PairingManager::init() {
     }
   }).detach();
 
+  std::thread([this]() {
+    int retries = 0;
+    while (true) {
+      bool status_result = get_microhard_modem_status();
+      if (status_result || !_get_status_initialized) {
+        if (status_result) {
+          _get_status_initialized = true;
+        }
+        retries = 0;
+        std::this_thread::sleep_for(3s);
+      } else {
+        retries++;
+      }
+      if (retries > 5) {
+        std::cout << timestamp() << "Could not get Microhard modem status. Exiting." << std::endl;
+        exit(-1);
+      }
+    }
+  }).detach();
+
   return true;
 }
 
@@ -229,6 +249,8 @@ void PairingManager::configure_microhard(const std::string& air_ip, const std::s
     std::this_thread::sleep_for(3s);
     exit(-1);
   }
+
+  _get_status_initialized = false;
 }
 
 //-----------------------------------------------------------------------------
@@ -754,3 +776,128 @@ bool PairingManager::handlePairingCommand() {
 std::string PairingManager::get_json_gcs_filename() { return persistent_folder + json_gcs_filename; };
 
 //-----------------------------------------------------------------------------
+bool PairingManager::get_microhard_modem_status()
+{
+  std::lock_guard<std::mutex> guard(_mh_mutex);
+
+  std::string modem_ip = _pairing_val["MHIP"].asString();
+  if (!can_ping(modem_ip, 1)) {
+    return false;
+  }
+
+  ConfigMicrohardState state = ConfigMicrohardState::LOGIN;
+
+  bool timeout = false;
+  while (!timeout && state != ConfigMicrohardState::DONE) {
+    state = ConfigMicrohardState::LOGIN;
+    ConfigMicrohardState state_prev = state;
+
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock >= 0) {
+      if (!is_socket_connected(sock, modem_ip)) {
+        close(sock);
+        break;
+      }
+
+      char buffer[1024];
+      std::string cmd;
+
+      auto start_time = std::chrono::steady_clock::now();
+      while (true) {
+        auto end_time = std::chrono::steady_clock::now();
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() > 6000) {
+          timeout = true;
+          break;
+        }
+
+        int n = read(sock, buffer, sizeof(buffer));
+        if (n <= 0) {
+          std::this_thread::sleep_for(10ms);
+          continue;
+        }
+
+        start_time = std::chrono::steady_clock::now();
+
+        std::string logbuf;
+        std::string output;
+        buffer[n] = 0;
+        output += buffer;
+        logbuf += buffer;
+        cmd = "";
+        if (state == ConfigMicrohardState::LOGIN && output.find("login:") != std::string::npos) {
+          state = ConfigMicrohardState::PASSWORD;
+          cmd = "admin\n";
+        } else if (state == ConfigMicrohardState::PASSWORD && output.find("Password:") != std::string::npos) {
+          state = ConfigMicrohardState::GET_STATUS;
+          cmd = config_password + "\n";
+        } else if (state == ConfigMicrohardState::GET_STATUS && output.find("Entering") != std::string::npos) {
+          cmd = "AT+MWSTATUS\n";
+          output = "";
+          state = ConfigMicrohardState::READ_STATUS;
+        } else if (state == ConfigMicrohardState::READ_STATUS && check_at_result(output)) {
+          state = ConfigMicrohardState::DONE;
+          parse_microhard_modem_status(output);
+          break;
+        }
+
+        if (state_prev != state && !cmd.empty()) {
+          send(sock, cmd.c_str(), cmd.length(), 0);
+        }
+
+        state_prev = state;
+      }
+      close(sock);
+    }
+  }
+
+  return (state == ConfigMicrohardState::DONE);
+}
+
+//-----------------------------------------------------------------------------
+void PairingManager::set_RSSI_report_callback(std::function<void(int)> report_callback) {
+  _rssi_report_callback = std::move(report_callback);
+}
+
+//-----------------------------------------------------------------------------
+/*
+General Status
+  MAC Address        : 00:0F:92:FB:81:4B
+  Operation Mode     : Master
+  Network ID         : SRR_2467
+  Bandwidth          : 4 MHz
+  Frequency          : 2467 MHz
+  Tx Power           : 30 dBm
+  Encryption Type    : AES-128
+Traffic Status
+  Receive Bytes      : 13.834KB
+  Receive Packets    : 226
+  Transmit Bytes     : 27.879KB
+  Transmit Packets   : 276
+Connection Info
+  MAC Address        : 00:0F:92:FB:81:5F
+  Tx Mod (MIMO)      : 64-QAM FEC 5/6 (On)
+  Rx Mod (MIMO)      : QPSK FEC 1/2 (On)
+  SNR (dB)           : 68
+  RSSI (dBm)         : -33 [-33, -65]
+  Noise Floor (dBm)  : -101
+OK
+*/
+
+void PairingManager::parse_microhard_modem_status(std::string output) {
+  auto i1 = output.find("RSSI (dBm)");
+  if (i1 != std::string::npos) {
+    auto i2 = output.find(": ", i1);
+    if (i2 != std::string::npos) {
+      i2 += 2;
+      auto i3 = output.find(" ", i2);
+      if (i3 != std::string::npos) {
+        int rssi;
+        if (atoi(output.substr(i2, i3 - i2).c_str(), rssi)) {
+          if (_rssi_report_callback) {
+            _rssi_report_callback(rssi);
+          }
+        }
+      }
+    }
+  }
+}

@@ -122,7 +122,7 @@ std::vector<std::string> scan_ifaces() {
 }
 
 //-----------------------------------------------------------------------------
-bool atoi(char* a, int& val) {
+bool atoi(const char* a, int& val) {
   char* end;
   long v = strtol(a, &end, 10);
   if (end == a || *end != '\0' || errno == ERANGE || v < INT_MIN || v > INT_MAX) {
@@ -133,3 +133,22 @@ bool atoi(char* a, int& val) {
 }
 
 //-----------------------------------------------------------------------------
+bool can_ping(std::string ip, int timeout) {
+  if (ip.empty()) {
+    return false;
+  }
+
+  std::string cmd = "ping -c 1 -W " + std::to_string(timeout) + " -n " + ip;
+
+  std::array<char, 128> buffer;
+  std::string result;
+  std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);
+  if (!pipe) {
+    return false;
+  }
+  while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+    result += buffer.data();
+  }
+
+  return result.find("100% packet loss") == std::string::npos;
+}

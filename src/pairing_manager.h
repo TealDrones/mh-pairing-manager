@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include <functional>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -44,6 +45,8 @@ enum class ConfigMicrohardState {
   NETWORK_ID,
   SAVE,
   DONE,
+  GET_STATUS,
+  READ_STATUS,
   NONE
 };
 
@@ -60,6 +63,7 @@ class PairingManager {
   std::string disconnect_gcs_request(const std::string& req_body);
   std::string set_channel_request(const std::string& req_body);
   bool handlePairingCommand();
+  void set_RSSI_report_callback(std::function<void(int)> report_callback);
 
   // Parameters
   std::string link_type;
@@ -119,6 +123,8 @@ class PairingManager {
   std::string _port = "";
   std::mutex _udp_mutex;
   std::mutex _mh_mutex;
+  std::function<void(int)> _rssi_report_callback;
+  bool _get_status_initialized = false;
   int _fd;
 
   std::chrono::steady_clock::time_point _last_pairing_time_stamp;
@@ -177,4 +183,16 @@ class PairingManager {
   * @returns    json data in string type
   **/
   std::string from_json_to_string(const Json::Value& val);
+
+  /**
+  * @brief      Reads and handles Microhard modem status
+  * @returns    json data in string type
+  **/
+  bool get_microhard_modem_status();
+  
+  /**
+  * @brief      Parse Microhard modem status output
+  * @param[in]  output, what modem returns when asked for status
+  **/
+  void parse_microhard_modem_status(std::string output);
 };

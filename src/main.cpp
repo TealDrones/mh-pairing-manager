@@ -102,6 +102,11 @@ int main(int argc, char* argv[]) {
     }
   });
 
+  pairing_manager.set_RSSI_report_callback([&](int rssi) {
+    std::cout << timestamp() << "RSSI: " << rssi << std::endl;
+    mav_handler.send_radio_status(static_cast<uint8_t>(-rssi));
+  });
+
   signal(SIGINT, quit_handler);
   signal(SIGTERM, quit_handler);
   std::unique_lock<std::mutex> lk(m);

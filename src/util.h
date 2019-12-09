@@ -31,4 +31,6 @@ std::vector<std::string> split(std::string str, char delimiter);
 
 std::vector<std::string> scan_ifaces();
 
-bool atoi(char* a, int& val);
+bool atoi(const char* a, int& val);
+
+bool can_ping(std::string ip, int timeout);

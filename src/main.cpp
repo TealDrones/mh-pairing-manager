@@ -52,8 +52,8 @@ void quit_handler(int /*sig*/) {
   std::unique_lock<std::mutex> lk(m);
   cv.notify_one();
 }
-//-----------------------------------------------------------------------------
 
+//-----------------------------------------------------------------------------
 int main(int argc, char* argv[]) {
   PairingManager pairing_manager;
   MAVLinkHandler mav_handler;
@@ -91,7 +91,7 @@ int main(int argc, char* argv[]) {
 #ifdef UNSECURE_DEBUG
   // Used for debugging if pairing button on PX4 is not available
   mux.handle("/startpairing").get([&pairing_manager](served::response& res, const served::request&) {
-    res << "Pairing command " << (pairing_manager.handlePairingCommand() ? "accepted." : "denied.");
+    res << "Pairing command " << (pairing_manager.handle_pairing_command() ? "accepted." : "denied.");
   });
 #endif
   std::cout << timestamp() << "Listening on http://localhost:" << pairing_manager.pairing_port << "/pair" << std::endl;
@@ -99,19 +99,23 @@ int main(int argc, char* argv[]) {
   server.run(3, false);
 
   //-- Start MAVLink handler
-  mav_handler.init(pairing_manager.mavlink_udp_port, 198, [&](mavlink_message_t* msg, struct sockaddr* srcaddr) {
-    if (msg->msgid == MAVLINK_MSG_ID_COMMAND_LONG) {
-      mavlink_command_long_t cmd;
-      mavlink_msg_command_long_decode(msg, &cmd);
-      switch (cmd.command) {
-        case MAV_CMD_START_RX_PAIR: {
-          // GCS pairing request handled by a companion (param1 = 10).
-          if (cmd.param1 == 10.f) {
-            unsigned char result = pairing_manager.handlePairingCommand() ? MAV_RESULT_ACCEPTED : MAV_RESULT_DENIED;
-            mav_handler.send_cmd_ack(msg->sysid, msg->compid, MAV_CMD_START_RX_PAIR, result, srcaddr);
+  mav_handler.init(pairing_manager.mavlink_udp_port, 198,
+    [&](mavlink_message_t* msg, struct sockaddr* srcaddr) {
+    switch (msg->msgid) {
+      case MAVLINK_MSG_ID_COMMAND_LONG: {
+        mavlink_command_long_t cmd;
+        mavlink_msg_command_long_decode(msg, &cmd);
+        switch (cmd.command) {
+          case MAV_CMD_START_RX_PAIR: {
+            // GCS pairing request handled by a companion (param1 = 10).
+            if (cmd.param1 == 10.f) {
+              unsigned char result = pairing_manager.handle_pairing_command() ? MAV_RESULT_ACCEPTED : MAV_RESULT_DENIED;
+              mav_handler.send_cmd_ack(msg->sysid, msg->compid, MAV_CMD_START_RX_PAIR, result, srcaddr);
+            }
             break;
           }
         }
+        break;
       }
     }
   });

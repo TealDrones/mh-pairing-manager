@@ -80,7 +80,7 @@ class PairingManager {
   std::string connect_gcs_request(const std::string& req_body);
   std::string disconnect_gcs_request(const std::string& req_body);
   std::string set_channel_request(const std::string& req_body);
-  bool handlePairingCommand();
+  bool handle_pairing_command();
   void set_RSSI_report_callback(std::function<void(int)> report_callback);
   void set_quit_callback(std::function<void(int)> quit_callback);
 
@@ -161,7 +161,7 @@ class PairingManager {
 
   void configure_microhard_network_interface(const std::string& ip);
   bool configure_microhard_now(const std::string& air_ip, const std::string& config_pwd,
-                           const std::string& modem_name, 
+                           const std::string& modem_name,
                            const std::string& new_mh_ip, const std::string& encryption_key,
                            const std::string& network_id, const std::string& channel,
                            const std::string& bandwidth, const std::string& power,
@@ -172,7 +172,7 @@ class PairingManager {
                            const std::string& network_id, const std::string& channel,
                            const std::string& bandwidth, const std::string& power);
   void reconfigure_microhard();
-  bool create_gcs_pairing_json(const std::string& s, 
+  bool create_gcs_pairing_json(const std::string& s,
                                std::string& cc_ip, std::string& mh_ip,
                                std::string& connect_key, std::string& channel,
                                std::string& bandwidth, std::string& network_id);
@@ -230,7 +230,7 @@ class PairingManager {
   * @returns    json data in string type
   **/
   bool get_microhard_modem_status();
-  
+
   /**
   * @brief      Parse Microhard modem status output
   * @param[in]  output, what modem returns when asked for status

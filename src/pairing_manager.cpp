@@ -269,7 +269,6 @@ void PairingManager::configure_microhard_network_interface(const std::string& ip
   if (current_ip != ip) {
     std::cout << timestamp() << "Configure microhard network interface " << ethernet_device << " " << current_ip << std::endl;
     std::string cmd = "ifconfig " + ethernet_device + " down;";
-    cmd += "sleep 2;";
     cmd += "ifconfig " + ethernet_device + " " + ip + " up";
     std::cout << cmd << std::endl;
     exec(cmd.c_str());
@@ -349,6 +348,8 @@ bool PairingManager::configure_microhard_now(
     _pairing_val["MHIP"] = new_mh_ip;
   }
 
+  _get_status_initialized = false;
+
   return true;
 }
 
@@ -373,7 +374,7 @@ void PairingManager::configure_microhard(const std::string& air_ip, const std::s
   }
 
   for (auto i = trial_list.begin(); i != trial_list.end(); i++) {
-    std::cout << timestamp() << "Pinging " << air_unit_ip << std::endl;
+    std::cout << timestamp() << "Pinging " << *i << std::endl;
     if (can_ping(*i, 1)) {
       if (configure_microhard_now(*i, config_pwd, modem_name, new_mh_ip, encryption_key, network_id, channel, bandwidth, power, *i != air_unit_ip)) {
         if (!new_cc_ip.empty()) {
@@ -899,7 +900,7 @@ bool PairingManager::write_json_gcs_file(Json::Value& val) {
 }
 
 //-----------------------------------------------------------------------------
-bool PairingManager::handlePairingCommand() {
+bool PairingManager::handle_pairing_command() {
   std::cout << timestamp() << "Got pairing command" << std::endl;
   bool result = false;
   _pairing_mutex.lock();
@@ -938,7 +939,8 @@ bool PairingManager::get_microhard_modem_status()
 {
   std::lock_guard<std::mutex> guard(_mh_mutex);
 
-  if (!can_ping(air_unit_ip, 1)) {
+  std::string modem_ip = _pairing_val["MHIP"].asString();
+  if (!can_ping(modem_ip, 1)) {
     return false;
   }
 
@@ -951,7 +953,7 @@ bool PairingManager::get_microhard_modem_status()
 
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock >= 0) {
-      if (!is_socket_connected(sock, air_unit_ip)) {
+      if (!is_socket_connected(sock, modem_ip)) {
         close(sock);
         break;
       }

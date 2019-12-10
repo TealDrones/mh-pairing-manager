@@ -374,8 +374,8 @@ void PairingManager::configure_microhard(const std::string& air_ip, const std::s
   }
 
   for (auto i = trial_list.begin(); i != trial_list.end(); i++) {
-    std::cout << timestamp() << "Pinging " << *i << std::endl;
     if (can_ping(*i, 1)) {
+      std::cout << timestamp() << "Got ping response from " << *i << std::endl;
       if (configure_microhard_now(*i, config_pwd, modem_name, new_mh_ip, encryption_key, network_id, channel, bandwidth, power, *i != air_unit_ip)) {
         if (!new_cc_ip.empty()) {
           configure_microhard_network_interface(new_cc_ip);
@@ -383,7 +383,7 @@ void PairingManager::configure_microhard(const std::string& air_ip, const std::s
         return;
       }
     } else {
-      std::cout << timestamp() << "Could not ping " << air_unit_ip << std::endl;
+      std::cout << timestamp() << "Could not ping " << *i << std::endl;
     }
   }
 

@@ -780,8 +780,7 @@ bool PairingManager::get_microhard_modem_status()
 {
   std::lock_guard<std::mutex> guard(_mh_mutex);
 
-  std::string modem_ip = _pairing_val["MHIP"].asString();
-  if (!can_ping(modem_ip, 1)) {
+  if (!can_ping(air_unit_ip, 1)) {
     return false;
   }
 
@@ -794,7 +793,7 @@ bool PairingManager::get_microhard_modem_status()
 
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock >= 0) {
-      if (!is_socket_connected(sock, modem_ip)) {
+      if (!is_socket_connected(sock, air_unit_ip)) {
         close(sock);
         break;
       }

@@ -76,6 +76,8 @@ bool PairingManager::init() {
     persistent_folder = "./";
   }
 
+  configure_microhard_network_interface(pairing_cc_ip);
+
   _aes.init(pairing_encryption_key);
   create_pairing_val();
 

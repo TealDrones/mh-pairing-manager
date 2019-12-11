@@ -691,7 +691,11 @@ bool PairingManager::unpair_gcs(const std::string& req_body) {
   std::lock_guard<std::mutex> pairing_guard(_pairing_mutex);
   if (!_pairing_mode) {
     _pairing_val["EK"] = OpenSSL_Rand::random_string(random_aes_key_length);
-    reconfigure_microhard();
+    // Change modem parameters after the response was sent
+    std::thread([this]() {
+      std::this_thread::sleep_for(100ms);
+      reconfigure_microhard();
+    }).detach();
   }
 
   return true;

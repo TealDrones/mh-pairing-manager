@@ -44,14 +44,12 @@
 #include "helper.h"
 #include "mavlink_handler.h"
 
-static bool should_exit = false;
 static std::mutex m;
 static std::condition_variable cv;
 
 //-----------------------------------------------------------------------------
 void quit_handler(int /*sig*/) {
   std::unique_lock<std::mutex> lk(m);
-  should_exit = true;
   cv.notify_one();
 }
 //-----------------------------------------------------------------------------
@@ -63,6 +61,7 @@ int main(int argc, char* argv[]) {
   check_env_variables(pairing_manager);
   parse_argv(argc, argv, pairing_manager);
 
+  pairing_manager.set_quit_callback(quit_handler);
   if (!pairing_manager.init()) {
     std::cout << timestamp() << "Could not initialize pairing manager" << std::endl;
     return -1;
@@ -124,11 +123,9 @@ int main(int argc, char* argv[]) {
 
   signal(SIGINT, quit_handler);
   signal(SIGTERM, quit_handler);
-  std::unique_lock<std::mutex> lk(m);
 
-  while (!should_exit) {
-    cv.wait(lk);
-  }
+  std::unique_lock<std::mutex> lk(m);
+  cv.wait(lk);
 
   server.stop();
   return 0;

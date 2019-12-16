@@ -33,6 +33,7 @@
 
 #pragma once
 
+#include <condition_variable>
 #include <functional>
 #include <mutex>
 #include <string>
@@ -79,6 +80,7 @@ class PairingManager {
   std::string set_channel_request(const std::string& req_body);
   bool handlePairingCommand();
   void set_RSSI_report_callback(std::function<void(int)> report_callback);
+  void set_quit_callback(std::function<void(int)> quit_callback);
 
   // Parameters
   std::string link_type;
@@ -138,7 +140,10 @@ class PairingManager {
   std::string _port = "";
   std::mutex _udp_mutex;
   std::mutex _mh_mutex;
+  std::mutex _quit_mutex;
+  std::condition_variable _quit_cv;
   std::function<void(int)> _rssi_report_callback;
+  std::function<void(int)> _quit_callback;
   bool _get_status_initialized = false;
   int _fd;
 
@@ -210,4 +215,6 @@ class PairingManager {
   * @param[in]  output, what modem returns when asked for status
   **/
   void parse_microhard_modem_status(std::string output);
+
+  void quit();
 };

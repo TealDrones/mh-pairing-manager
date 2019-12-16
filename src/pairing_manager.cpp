@@ -82,31 +82,53 @@ bool PairingManager::init() {
       _udp_mutex.lock();
       refresh_udp_endpoint();
       _udp_mutex.unlock();
-      std::this_thread::sleep_for(10s);
+      std::unique_lock<std::mutex> lk(_quit_mutex);
+      if (_quit_cv.wait_for(lk, 10s) != std::cv_status::timeout) {
+        break;
+      }
     }
   }).detach();
 
   std::thread([this]() {
     int retries = 0;
     while (true) {
+      auto time_to_wait = 1s;
       bool status_result = get_microhard_modem_status();
       if (status_result || !_get_status_initialized) {
         if (status_result) {
           _get_status_initialized = true;
         }
         retries = 0;
-        std::this_thread::sleep_for(3s);
+        time_to_wait = 3s;
       } else {
         retries++;
       }
       if (retries > 5) {
         std::cout << timestamp() << "Could not get Microhard modem status. Exiting." << std::endl;
-        exit(-1);
+        quit();
+        break;
+      }
+      std::unique_lock<std::mutex> lk(_quit_mutex);
+      if (_quit_cv.wait_for(lk, time_to_wait) != std::cv_status::timeout) {
+        break;
       }
     }
   }).detach();
 
   return true;
+}
+
+void PairingManager::quit() {
+  _ip = "";
+  _port = "";
+  remove_endpoint("gcs");
+  {
+    std::unique_lock<std::mutex> lk(_quit_mutex);
+    _quit_cv.notify_one();
+  }
+  if (_quit_callback) {
+    _quit_callback(0);
+  }
 }
 
 void PairingManager::print_microhard_buffer_debug(std::string& logbuf) {
@@ -262,7 +284,7 @@ void PairingManager::configure_microhard(const std::string& air_ip, const std::s
   if (state != ConfigMicrohardState::DONE) {
     std::cout << timestamp() << "Could not configure Microhard modem. Exiting ..." << std::endl;
     std::this_thread::sleep_for(3s);
-    exit(-1);
+    quit();
   }
 
   _get_status_initialized = false;
@@ -293,7 +315,7 @@ void PairingManager::create_pairing_json_for_zerotier(Json::Value& val) {
   } catch (...) {
     std::cout << timestamp() << "Could not get ZeroTier IP. Exiting ..." << std::endl;
     std::this_thread::sleep_for(3s);
-    exit(-1);
+    quit();
   }
 }
 
@@ -870,6 +892,11 @@ bool PairingManager::get_microhard_modem_status()
 //-----------------------------------------------------------------------------
 void PairingManager::set_RSSI_report_callback(std::function<void(int)> report_callback) {
   _rssi_report_callback = std::move(report_callback);
+}
+
+//-----------------------------------------------------------------------------
+void PairingManager::set_quit_callback(std::function<void(int)> quit_callback) {
+  _quit_callback = std::move(quit_callback);
 }
 
 //-----------------------------------------------------------------------------

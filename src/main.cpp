@@ -99,7 +99,7 @@ int main(int argc, char* argv[]) {
   server.run(3, false);
 
   //-- Start MAVLink handler
-  mav_handler.init(pairing_manager.mavlink_udp_port, 198,
+  mav_handler.init(pairing_manager.mavlink_udp_port, MAV_COMP_ID_PAIRING_MANAGER,
     [&](mavlink_message_t* msg, struct sockaddr* srcaddr) {
     switch (msg->msgid) {
       case MAVLINK_MSG_ID_COMMAND_LONG: {

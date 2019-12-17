@@ -76,8 +76,6 @@ bool PairingManager::init() {
     persistent_folder = "./";
   }
 
-  configure_microhard_network_interface(pairing_cc_ip);
-
   _aes.init(pairing_encryption_key);
   create_pairing_val();
 
@@ -363,6 +361,19 @@ void PairingManager::configure_microhard(const std::string& air_ip, const std::s
                                          const std::string& bandwidth, const std::string& power) {
   std::lock_guard<std::mutex> guard(_mh_mutex);
   std::vector<std::string> trial_list;
+
+  // If network interface was not configured at all then we configure it 
+  // before we start scanning for Microhard modem
+  bool found = false;
+  for (auto i : scan_ifaces()) {
+    if (i.find(ip_prefix.c_str()) != std::string::npos) {
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    configure_microhard_network_interface(!new_cc_ip.empty() ? new_cc_ip : pairing_cc_ip);
+  }
 
   for (int i = 0; i < max_num_of_devices; i++) {
     std::string trial_ip = ip_prefix + "." + std::to_string(i + connect_mh_ip_start);

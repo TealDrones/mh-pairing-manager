@@ -33,19 +33,12 @@
 
 #pragma once
 
-#include <string>
-#include <vector>
+#include <getopt.h>
+#include <iostream>
 
-std::string timestamp();
+#include "pairing_manager.h"
+#include "util.h"
 
-std::string exec(const char* cmd);
-
-bool iequals(const std::string& str1, const std::string& str2);
-
-std::vector<std::string> split(std::string str, char delimiter);
-
-std::vector<std::string> scan_ifaces();
-
-bool atoi(const char* a, int& val);
-
-bool can_ping(std::string ip, int timeout);
+void help_argv_description(const char* pgm);
+void parse_argv(int argc, char* const argv[], PairingManager& pairing_manager);
+void check_env_variables(PairingManager& pairing_manager);

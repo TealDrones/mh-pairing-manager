@@ -225,8 +225,12 @@ void PairingManager::parse_buffer(std::string& cmd, ConfigMicrohardState& state,
       state = ConfigMicrohardState::SAVE;
     } else if (state == ConfigMicrohardState::SAVE && check_at_result(output)) {
       cmd = std::string("AT&W\n");
+      state = ConfigMicrohardState::WRITE_FLASH;
+    } else if (state == ConfigMicrohardState::WRITE_FLASH && check_at_result(output)) {
+      skip = true;
       state = ConfigMicrohardState::DONE;
     }
+
   } while (skip);
 }
 
@@ -310,7 +314,7 @@ bool PairingManager::configure_microhard_now(
       auto start_time = std::chrono::steady_clock::now();
       while (true) {
         auto end_time = std::chrono::steady_clock::now();
-        if (std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() > 6000) {
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() > 10000) {
           std::cout << timestamp() << "Microhard configuration timeout." << std::endl;
           timeout = true;
           break;
@@ -332,7 +336,6 @@ bool PairingManager::configure_microhard_now(
         state_prev = state;
 
         if (state == ConfigMicrohardState::DONE) {
-          std::this_thread::sleep_for(1000ms);
           break;
         }
       }

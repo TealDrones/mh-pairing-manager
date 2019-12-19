@@ -272,7 +272,7 @@ void PairingManager::configure_microhard(const std::string& air_ip, const std::s
           state_prev = state;
 
           if (state == ConfigMicrohardState::DONE) {
-            std::this_thread::sleep_for(500ms);
+            std::this_thread::sleep_for(1000ms);
             break;
           }
         }

@@ -629,7 +629,8 @@ std::string PairingManager::pair_gcs_request(const std::string& req_body) {
   val["CMD"] = "pair";
   val["NM"] = machine_name;
 
-  if (create_gcs_pairing_json(req_body, cc_ip, mh_ip, connect_key, channel, bandwidth, network_id) &&
+  if (_pairing_mode &&
+      create_gcs_pairing_json(req_body, cc_ip, mh_ip, connect_key, channel, bandwidth, network_id) &&
       cc_ip != "" && mh_ip != "" && connect_key != "" && channel != "" && network_id != "") {
     std::cout << timestamp() << "Got CC IP: " << cc_ip << ", MH IP: " << mh_ip << ", connect key"
 #ifdef UNSECURE_DEBUG
@@ -654,7 +655,7 @@ std::string PairingManager::pair_gcs_request(const std::string& req_body) {
     val["RES"] = "accepted";
     val["PublicKey"] = _rsa.get_public_key();
   } else {
-    std::cout << timestamp() << "Did not get all required parameters" << std::endl;
+    std::cout << timestamp() << "Pairing command from GCS rejected" << std::endl;
     val["RES"] = "rejected";
   }
   std::string message = pack_response(val);

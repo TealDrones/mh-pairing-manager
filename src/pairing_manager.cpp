@@ -640,6 +640,7 @@ std::string PairingManager::pair_gcs_request(const std::string& req_body) {
   val["CMD"] = "pair";
   val["NM"] = machine_name;
 
+  _operation_mutex.lock();
   if (_pairing_mode &&
       create_gcs_pairing_json(req_body, cc_ip, mh_ip, connect_key, channel, bandwidth, network_id) &&
       cc_ip != "" && mh_ip != "" && connect_key != "" && channel != "" && network_id != "") {
@@ -659,6 +660,7 @@ std::string PairingManager::pair_gcs_request(const std::string& req_body) {
                           machine_name, cc_ip, mh_ip,
                           connect_key, network_id, channel,
                           bandwidth, default_transmit_power);
+      _operation_mutex.unlock();
     }).detach();
     val["IP"] = cc_ip;
     val["CC"] = channel;
@@ -702,6 +704,7 @@ std::string PairingManager::pack_response(Json::Value& response) {
 
 //-----------------------------------------------------------------------------
 std::string PairingManager::unpair_gcs_request(const std::string& req_body) {
+  std::lock_guard<std::mutex> guard(_operation_mutex);
   std::cout << timestamp() << "Got unpair request" << std::endl;
 
   Json::Value val;
@@ -748,6 +751,7 @@ bool PairingManager::unpair_gcs(const std::string& req_body) {
 
 //-----------------------------------------------------------------------------
 std::string PairingManager::connect_gcs_request(const std::string& req_body) {
+  std::lock_guard<std::mutex> guard(_operation_mutex);
   std::cout << timestamp() << "Got connect request" << std::endl;
 
   Json::Value val;
@@ -793,6 +797,7 @@ bool PairingManager::connect_gcs(const std::string& req_body, std::string& chann
 
 //-----------------------------------------------------------------------------
 std::string PairingManager::disconnect_gcs_request(const std::string& req_body) {
+  std::lock_guard<std::mutex> guard(_operation_mutex);
   std::cout << timestamp() << "Got disconnect request" << std::endl;
 
   Json::Value val;
@@ -830,6 +835,7 @@ bool PairingManager::disconnect_gcs(const std::string& req_body) {
 
 //-----------------------------------------------------------------------------
 std::string PairingManager::set_channel_request(const std::string& req_body) {
+  _operation_mutex.lock();
   std::cout << timestamp() << "Got set channel request: " << req_body << std::endl;
 
   Json::Value val;
@@ -856,12 +862,14 @@ bool PairingManager::set_channel(const std::string& req_body, Json::Value& val) 
 
   if (!set_channel(val["NID"].asString(), val["CC"].asString(), val["PW"].asString(), val["BW"].asString())) {
     std::cout << timestamp() << "Set channel failed!" << std::endl;
+    _operation_mutex.unlock();
     return false;
   }
 
   return true;
 }
 
+//-----------------------------------------------------------------------------
 void PairingManager::print_json(const std::string& msg, const Json::Value& val) {
 #ifdef UNSECURE_DEBUG
   std::cout << timestamp() << msg << std::endl;
@@ -870,6 +878,7 @@ void PairingManager::print_json(const std::string& msg, const Json::Value& val) 
 #endif
 }
 
+//-----------------------------------------------------------------------------
 std::string PairingManager::from_json_to_string(const Json::Value& val) {
   Json::StreamWriterBuilder builder;
   builder["commentStyle"] = "None";
@@ -878,6 +887,7 @@ std::string PairingManager::from_json_to_string(const Json::Value& val) {
   std::stringstream string_stream(Json::writeString(builder, val));
   return string_stream.str();
 }
+
 //-----------------------------------------------------------------------------
 bool PairingManager::set_channel(const std::string& new_network_id, const std::string& new_ch, const std::string& power,
                                  const std::string& new_bandwidth) {
@@ -919,6 +929,7 @@ bool PairingManager::set_channel(const std::string& new_network_id, const std::s
                         machine_name, "", "",
                         connect_key, new_network_id,
                         new_ch, new_bandwidth, power);
+    _operation_mutex.unlock();
   }).detach();
 
   return true;

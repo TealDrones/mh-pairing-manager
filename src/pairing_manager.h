@@ -152,6 +152,7 @@ class PairingManager {
   std::mutex _udp_mutex;
   std::mutex _mh_mutex;
   std::mutex _quit_mutex;
+  std::mutex _operation_mutex;
   std::condition_variable _quit_cv;
   std::function<void(int)> _rssi_report_callback;
   std::function<void(int)> _quit_callback;

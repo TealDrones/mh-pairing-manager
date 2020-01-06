@@ -277,20 +277,30 @@ bool PairingManager::is_socket_connected(const int& sock, const std::string& air
 void PairingManager::configure_microhard_network_interface(const std::string& ip) {
   std::string current_ip = "";
   for (auto i : scan_ifaces()) {
-    if (i.find(ip_prefix.c_str()) != std::string::npos) {
+    if (i.find(ip_prefix) != std::string::npos) {
       current_ip = i;
       break;
     }
   }
 
-  if (current_ip != ip) {
+  while (current_ip != ip) {
     std::cout << timestamp() << "Configure microhard network interface " << ethernet_device << " " << current_ip << std::endl;
-    std::string cmd = "ifconfig " + ethernet_device + " down;";
-    cmd += "ifconfig " + ethernet_device + " " + ip + " up";
+    std::string cmd = "ifconfig " + ethernet_device + " down";
     std::cout << cmd << std::endl;
     exec(cmd.c_str());
-    _pairing_val["CCIP"] = ip;
+    std::this_thread::sleep_for(1000ms);
+    cmd = "ifconfig " + ethernet_device + " " + ip + " up";
+    std::cout << cmd << std::endl;
+    exec(cmd.c_str());
+
+    for (auto i : scan_ifaces()) {
+      if (i.find(ip) != std::string::npos) {
+        current_ip = i;
+        break;
+      }
+    }
   }
+  _pairing_val["CCIP"] = ip;
 }
 
 bool PairingManager::configure_microhard_now(
@@ -352,6 +362,7 @@ bool PairingManager::configure_microhard_now(
           break;
         }
         if (!new_mh_ip.empty() && state == ConfigMicrohardState::WRITE_FLASH) {
+          std::this_thread::sleep_for(1000ms);
           state = ConfigMicrohardState::DONE;
           break;
         }
@@ -386,7 +397,7 @@ void PairingManager::configure_microhard(const std::string& air_ip, const std::s
   // before we start scanning for Microhard modem
   bool found = false;
   for (auto i : scan_ifaces()) {
-    if (i.find(ip_prefix.c_str()) != std::string::npos) {
+    if (i.find(ip_prefix) != std::string::npos) {
       found = true;
       break;
     }
@@ -464,7 +475,7 @@ void PairingManager::create_pairing_val_for_zerotier(Json::Value& val) {
 //-----------------------------------------------------------------------------
 void PairingManager::create_pairing_val_for_microhard(Json::Value& val) {
   for (auto i : scan_ifaces()) {
-    if (i.find(ip_prefix.c_str()) != std::string::npos) {
+    if (i.find(ip_prefix) != std::string::npos) {
       val["IP"] = i;
       break;
     }

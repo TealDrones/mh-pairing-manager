@@ -55,6 +55,9 @@ enum class ConfigMicrohardState {
   LOGIN,
   PASSWORD,
   CRYPTO_KEY,
+  MODEM_NAME,
+  MODEM_CHECK_NAME,
+  MODEM_IP,
   POWER,
   FREQUENCY,
   BANDWIDTH,
@@ -72,13 +75,12 @@ class PairingManager {
   ~PairingManager();
 
   bool init();
-  std::string get_pairing_json();
   std::string pair_gcs_request(const std::string& req_body);
   std::string unpair_gcs_request(const std::string& req_body);
   std::string connect_gcs_request(const std::string& req_body);
   std::string disconnect_gcs_request(const std::string& req_body);
   std::string set_channel_request(const std::string& req_body);
-  bool handlePairingCommand();
+  bool handle_pairing_command();
   void set_RSSI_report_callback(std::function<void(int)> report_callback);
   void set_quit_callback(std::function<void(int)> quit_callback);
 
@@ -86,6 +88,7 @@ class PairingManager {
   std::string link_type;
   std::string machine_name = "unknown";
   std::string ip_prefix = "192.168.168";
+  std::string pairing_cc_ip = "192.168.168.10";
   std::string air_unit_ip = "192.168.168.2";
   std::string pairing_port = "29351";
   std::string config_password = "12345678";
@@ -111,9 +114,10 @@ class PairingManager {
   * @param[in]   power, transmission power
   **/
   static void parse_buffer(std::string& cmd, ConfigMicrohardState& state, char* buffer, int n,
-                           const std::string& config_pwd, const std::string& encryption_key,
+                           const std::string& config_pwd, const std::string& modem_name,
+                           const std::string& new_modem_ip, const std::string& encryption_key,
                            const std::string& network_id, const std::string& channel, const std::string& bandwidth,
-                           const std::string& power);
+                           const std::string& power, bool check_name = false);
 
   /**
   * @brief       parses the the microhard radio response to an AT command
@@ -121,6 +125,13 @@ class PairingManager {
   * @returns     true if the AT command succeeded
   **/
   static bool check_at_result(const std::string& output);
+
+  /**
+  * @brief       parses the the microhard radio response to an AT command for getting modem name
+  * @param[in]   output, string containing the microhard response
+  * @returns     true if the name matches
+  **/
+  static bool check_at_result_modem_name(const std::string& output, const std::string& name);
 
   /**
   * @brief       prints the microhard response to AT commands for debugging purposes
@@ -132,7 +143,6 @@ class PairingManager {
   OpenSSL_AES _aes;
   OpenSSL_RSA _rsa;
   OpenSSL_RSA _gcs_rsa;
-  std::string _pairing_json = "";
   Json::Value _pairing_val;
   std::mutex _pairing_mutex;
   bool _pairing_mode = false;
@@ -149,16 +159,27 @@ class PairingManager {
 
   std::chrono::steady_clock::time_point _last_pairing_time_stamp;
 
-  void configure_microhard(const std::string& air_ip, const std::string& config_pwd, const std::string& encryption_key,
-                           const std::string& network_id, const std::string& channel, const std::string& bandwidth,
-                           const std::string& power);
+  void configure_microhard_network_interface(const std::string& ip);
+  bool configure_microhard_now(const std::string& air_ip, const std::string& config_pwd,
+                           const std::string& modem_name,
+                           const std::string& new_mh_ip, const std::string& encryption_key,
+                           const std::string& network_id, const std::string& channel,
+                           const std::string& bandwidth, const std::string& power,
+                           bool check_name = false);
+  void configure_microhard(const std::string& air_ip, const std::string& config_pwd,
+                           const std::string& modem_name, const std::string& new_cc_ip,
+                           const std::string& new_mh_ip, const std::string& encryption_key,
+                           const std::string& network_id, const std::string& channel,
+                           const std::string& bandwidth, const std::string& power);
   void reconfigure_microhard();
-  bool create_gcs_pairing_json(const std::string& s, std::string& connect_key, std::string& channel,
+  bool create_gcs_pairing_json(const std::string& s,
+                               std::string& cc_ip, std::string& mh_ip,
+                               std::string& connect_key, std::string& channel,
                                std::string& bandwidth, std::string& network_id);
-  void create_pairing_json();
-  void create_pairing_json_for_zerotier(Json::Value& val);
-  void create_pairing_json_for_microhard(Json::Value& val);
-  void create_pairing_json_for_taisync(Json::Value& val);
+  void create_pairing_val();
+  void create_pairing_val_for_zerotier(Json::Value& val);
+  void create_pairing_val_for_microhard(Json::Value& val);
+  void create_pairing_val_for_taisync(Json::Value& val);
   void open_udp_endpoint(const std::string& ip, const std::string& port);
   void refresh_udp_endpoint();
   void remove_endpoint(const std::string& name);
@@ -209,7 +230,7 @@ class PairingManager {
   * @returns    json data in string type
   **/
   bool get_microhard_modem_status();
-  
+
   /**
   * @brief      Parse Microhard modem status output
   * @param[in]  output, what modem returns when asked for status

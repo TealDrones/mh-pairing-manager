@@ -36,7 +36,7 @@ cmake_minimum_required(VERSION 3.10)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
 find_package(PkgConfig REQUIRED)
-find_package(GTest REQUIRED)
+find_package(GTest)
 
 project(pairing-manager)
 
@@ -99,10 +99,12 @@ target_link_libraries(pairing-manager-lib
   crypto
 )
 
-set(SRCS_TEST
-  helper_test.cpp
-  pairing_manager_test.cpp
-)
-add_executable(PAIRING_MANAGER_GTESTS ${SRCS_TEST})
-target_link_libraries(PAIRING_MANAGER_GTESTS ${GTEST_MAIN_LIBRARIES} ${GTEST_LIBRARIES} pairing-manager-lib)
-add_test(NAME PAIRING_MANAGER_GTESTS COMMAND PAIRING_MANAGER_GTESTS)
+if (GTEST_FOUND)
+  set(SRCS_TEST
+    helper_test.cpp
+    pairing_manager_test.cpp
+  )
+  add_executable(PAIRING_MANAGER_GTESTS ${SRCS_TEST})
+  target_link_libraries(PAIRING_MANAGER_GTESTS ${GTEST_MAIN_LIBRARIES} ${GTEST_LIBRARIES} pairing-manager-lib)
+  add_test(NAME PAIRING_MANAGER_GTESTS COMMAND PAIRING_MANAGER_GTESTS)
+endif()

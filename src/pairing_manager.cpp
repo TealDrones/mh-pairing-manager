@@ -128,9 +128,7 @@ void PairingManager::quit() {
     std::unique_lock<std::mutex> lk(_quit_mutex);
     _quit_cv.notify_one();
   }
-  if (_quit_callback) {
-    _quit_callback(0);
-  }
+  exit(0);
 }
 
 void PairingManager::print_microhard_buffer_debug(std::string& logbuf) {
@@ -1075,11 +1073,6 @@ bool PairingManager::get_microhard_modem_status()
 //-----------------------------------------------------------------------------
 void PairingManager::set_RSSI_report_callback(std::function<void(int)> report_callback) {
   _rssi_report_callback = std::move(report_callback);
-}
-
-//-----------------------------------------------------------------------------
-void PairingManager::set_quit_callback(std::function<void(int)> quit_callback) {
-  _quit_callback = std::move(quit_callback);
 }
 
 //-----------------------------------------------------------------------------

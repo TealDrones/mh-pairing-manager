@@ -61,7 +61,6 @@ int main(int argc, char* argv[]) {
   check_env_variables(pairing_manager);
   parse_argv(argc, argv, pairing_manager);
 
-  pairing_manager.set_quit_callback(quit_handler);
   if (!pairing_manager.init()) {
     std::cout << timestamp() << "Could not initialize pairing manager" << std::endl;
     return -1;
@@ -132,6 +131,9 @@ int main(int argc, char* argv[]) {
   cv.wait(lk);
 
   server.stop();
+
+  exit(0);
+
   return 0;
 }
 

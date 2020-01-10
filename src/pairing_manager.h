@@ -83,7 +83,6 @@ class PairingManager {
   std::string set_channel_request(const std::string& req_body);
   bool handle_pairing_command();
   void set_RSSI_report_callback(std::function<void(int)> report_callback);
-  void set_quit_callback(std::function<void(int)> quit_callback);
 
   // Parameters
   std::string link_type;
@@ -155,7 +154,6 @@ class PairingManager {
   std::mutex _operation_mutex;
   std::condition_variable _quit_cv;
   std::function<void(int)> _rssi_report_callback;
-  std::function<void(int)> _quit_callback;
   bool _get_status_initialized = false;
   int _fd;
 

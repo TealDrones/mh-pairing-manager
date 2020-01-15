@@ -104,6 +104,8 @@ void parse_argv(int argc, char* const argv[], PairingManager& pairing_manager) {
         break;
       case 'i':
         pairing_manager.ip_prefix = optarg;
+        pairing_manager.pairing_cc_ip = pairing_manager.ip_prefix + ".10";
+        pairing_manager.air_unit_ip = pairing_manager.ip_prefix + ".2";
         break;
       case 'a':
         pairing_manager.air_unit_ip = optarg;

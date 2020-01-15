@@ -88,8 +88,8 @@ class PairingManager {
   std::string link_type;
   std::string machine_name = "unknown";
   std::string ip_prefix = "192.168.168";
-  std::string pairing_cc_ip = "192.168.168.10";
-  std::string air_unit_ip = "192.168.168.2";
+  std::string pairing_cc_ip = ip_prefix + ".10";
+  std::string air_unit_ip = ip_prefix + ".2";
   std::string pairing_port = "29351";
   std::string config_password = "12345678";
   std::string pairing_encryption_key = "";

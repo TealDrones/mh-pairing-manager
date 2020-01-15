@@ -52,6 +52,7 @@ void help_argv_description(const char* pgm) {
                "  -c --config-password   Configuration password for Microhard Admin user\n"
                "  -s --pairing-net-id    Microhard pairing network id. Default: MH\n"
                "  -f --pairing-channel   Pairing channel\n"
+               "  -b --pairing-bandwidth Pairing bandwidth\n"
                "\n"
                "ZeroTier specific options:\n"
                "  -z --zerotier-id       ZeroTier ID\n"
@@ -70,6 +71,7 @@ void help_argv_description(const char* pgm) {
                "  PAIRING_MNG_ENCRYPTION_KEY        equivalent to -k\n"
                "  PAIRING_MNG_PAIRING_NETWORK_ID    equivalent to -s\n"
                "  PAIRING_MNG_PAIRING_CHANNEL       equivalent to -f\n"
+               "  PAIRING_MNG_PAIRING_BANDWIDTH     equivalent to -b\n"
                "  PAIRING_MNG_ZEROTIER_ID           equivalent to -z\n"
                "  PAIRING_MNG_ETHERNET_DEVICE       equivalent to -e\n";
 }
@@ -81,11 +83,12 @@ void parse_argv(int argc, char* const argv[], PairingManager& pairing_manager) {
       {"link-type", required_argument, nullptr, 'l'},       {"ip-prefix", required_argument, nullptr, 'i'},
       {"air-unit-ip", required_argument, nullptr, 'a'},     {"config-password", required_argument, nullptr, 'c'},
       {"pairing-key", required_argument, nullptr, 'k'},     {"pairing-net-id", required_argument, nullptr, 's'},
-      {"pairing-channel", required_argument, nullptr, 'f'}, {"zerotier-id", required_argument, nullptr, 'z'},
+      {"pairing-channel", required_argument, nullptr, 'f'}, {"pairing-bandwidth", required_argument, nullptr, 'b'},
+      {"zerotier-id", required_argument, nullptr, 'z'},
       {"ethernet-device", required_argument, nullptr, 'e'}, {"help", no_argument, nullptr, 'h'}};
   int c;
   bool invalid_argument = false;
-  while ((c = getopt_long(argc, argv, "n:d:m:p:l:i:a:c:k:s:f:z:e:h", options, nullptr)) >= 0) {
+  while ((c = getopt_long(argc, argv, "n:d:m:p:l:i:a:c:k:s:f:b:z:e:h", options, nullptr)) >= 0) {
     switch (c) {
       case 'h':
         help_argv_description(argv[0]);
@@ -116,6 +119,9 @@ void parse_argv(int argc, char* const argv[], PairingManager& pairing_manager) {
         break;
       case 'f':
         pairing_manager.pairing_channel = optarg;
+        break;
+      case 'b':
+        pairing_manager.pairing_bandwidth = optarg;
         break;
       case 'z':
         pairing_manager.zerotier_id = optarg;

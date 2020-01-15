@@ -73,7 +73,7 @@ TEST(helper_test, parse_argv) {
   const char *const argv[] = {
       "name",  "-n", "machine_name", "-d", "/data",         "-m", "12550",    "-p", "33333",      "-l",
       "link",  "-i", "192.168.168",  "-a", "192.168.168.2", "-c", "auterion", "-k", "1234567890", "-s",
-      "CH_36", "-f", "36",           "-z", "123",           "-e", "eth0",     "-m", "12345"};
+      "CH_36", "-f", "36",           "-z", "123",           "-e", "eth0",     "-m", "12345",      "-b1"};
 
   // WHEN: we parse the command line arguments
   parse_argv(sizeof(argv) / sizeof(argv[0]), const_cast<char *const *>(argv), pairing_manager);
@@ -89,6 +89,7 @@ TEST(helper_test, parse_argv) {
   EXPECT_EQ("1234567890", pairing_manager.pairing_encryption_key);
   EXPECT_EQ("CH_36", pairing_manager.pairing_network_id);
   EXPECT_EQ("36", pairing_manager.pairing_channel);
+  EXPECT_EQ("1", pairing_manager.pairing_bandwidth);
   EXPECT_EQ("123", pairing_manager.zerotier_id);
   EXPECT_EQ("eth0", pairing_manager.ethernet_device);
   EXPECT_EQ(12345, pairing_manager.mavlink_udp_port);

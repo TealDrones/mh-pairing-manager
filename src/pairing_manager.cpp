@@ -943,8 +943,11 @@ void PairingManager::parse_microhard_modem_status(std::string output) {
     auto i2 = output.find(": ", i1);
     if (i2 != std::string::npos) {
       i2 += 2;
-      auto i3 = output.find(" ", i2);
-      if (i3 != std::string::npos) {
+      auto i3 = i2 + 1;
+      while (i3 + 1 < output.length() && output[i3] >= '0' && output[i3] <= '9') {
+        i3++;
+      }
+      if (i3 < output.length()) {
         int rssi;
         if (atoi(output.substr(i2, i3 - i2).c_str(), rssi)) {
           if (_rssi_report_callback) {

@@ -198,6 +198,10 @@ void check_env_variables(PairingManager& pairing_manager) {
     pairing_manager.pairing_channel = val;
   }
 
+  if (const char* val = std::getenv("PAIRING_MNG_PAIRING_BANDWIDTH")) {
+    pairing_manager.pairing_bandwidth = val;
+  }
+
   if (const char* val = std::getenv("PAIRING_MNG_ZEROTIER_ID")) {
     pairing_manager.zerotier_id = val;
   }

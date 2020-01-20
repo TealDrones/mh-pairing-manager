@@ -166,9 +166,15 @@ void PairingManager::parse_buffer(std::string& cmd, ConfigMicrohardState& state,
       state = ConfigMicrohardState::PASSWORD;
       cmd = "admin\n";
     } else if (state == ConfigMicrohardState::PASSWORD && output.find("Password:") != std::string::npos) {
-      state = ConfigMicrohardState::CRYPTO_KEY;
+      state = ConfigMicrohardState::SYSTEM_SUMMARY;
       cmd = config_pwd + "\n";
-    } else if (state == ConfigMicrohardState::CRYPTO_KEY && output.find("Entering") != std::string::npos) {
+      output = "";
+    } else if (state == ConfigMicrohardState::SYSTEM_SUMMARY && output.find("Entering") != std::string::npos) {
+      state = ConfigMicrohardState::CRYPTO_KEY;
+      cmd = "AT+MSSYSI\n";
+      output = "";
+    } else if (state == ConfigMicrohardState::CRYPTO_KEY && check_at_result(output)) {
+      _system_summary = output;
       if (!encryption_key.empty()) {
         cmd = "AT+MWVENCRYPT=1," + encryption_key + "\n";
       } else {
@@ -214,9 +220,17 @@ void PairingManager::parse_buffer(std::string& cmd, ConfigMicrohardState& state,
       std::cout << timestamp() << "Set Microhard channel: " << channel << std::endl;
       state = ConfigMicrohardState::BANDWIDTH;
     } else if (state == ConfigMicrohardState::BANDWIDTH && check_at_result(output)) {
-      cmd = "AT+MWBAND=" + bandwidth + "\n";
+      std::string mh_model_bandwidth = bandwidth;
+      if (mh_model_bandwidth == "") {
+        if (_system_summary.find("DDL1800") != std::string::npos) {
+          mh_model_bandwidth = "3";
+        } else {
+          mh_model_bandwidth = "1";
+        }
+      }
+      cmd = "AT+MWBAND=" + mh_model_bandwidth + "\n";
       output = "";
-      std::cout << timestamp() << "Set Microhard bandwidth: " << bandwidth << std::endl;
+      std::cout << timestamp() << "Set Microhard bandwidth: " << mh_model_bandwidth << std::endl;
       state = ConfigMicrohardState::NETWORK_ID;
     } else if (state == ConfigMicrohardState::NETWORK_ID && check_at_result(output)) {
       cmd = "AT+MWNETWORKID=" + network_id + "\n";
@@ -451,7 +465,7 @@ void PairingManager::create_pairing_val_for_microhard(Json::Value& val) {
   }
 
   val["CP"] = config_password;
-  val["BW"] = default_pairing_bandwidth;
+  val["BW"] = pairing_bandwidth;
   val["PW"] = default_transmit_power;
   val["CCIP"] = pairing_cc_ip;
   val["MHIP"] = air_unit_ip;
@@ -937,7 +951,7 @@ bool PairingManager::handle_pairing_command() {
           configure_microhard(_pairing_val["MHIP"].asString(), _pairing_val["CP"].asString(),
                               machine_name, pairing_cc_ip, air_unit_ip,
                               pairing_encryption_key, pairing_network_id,
-                              pairing_channel, default_pairing_bandwidth, default_transmit_power);
+                              pairing_channel, pairing_bandwidth, default_transmit_power);
       }).detach();
       result = true;
     }
@@ -1070,8 +1084,11 @@ void PairingManager::parse_microhard_modem_status(std::string output) {
     auto i2 = output.find(": ", i1);
     if (i2 != std::string::npos) {
       i2 += 2;
-      auto i3 = output.find(" ", i2);
-      if (i3 != std::string::npos) {
+      auto i3 = i2 + 1;
+      while (i3 + 1 < output.length() && output[i3] >= '0' && output[i3] <= '9') {
+        i3++;
+      }
+      if (i3 < output.length()) {
         int rssi;
         if (atoi(output.substr(i2, i3 - i2).c_str(), rssi)) {
           if (_rssi_report_callback) {

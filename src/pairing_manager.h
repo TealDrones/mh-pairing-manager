@@ -44,7 +44,6 @@
 #include "openssl_rsa.h"
 
 const std::string default_pairing_channel = "36";
-const std::string default_pairing_bandwidth = "1";
 const std::string default_transmit_power = "7";
 
 /**
@@ -54,6 +53,7 @@ const std::string default_transmit_power = "7";
 enum class ConfigMicrohardState {
   LOGIN,
   PASSWORD,
+  SYSTEM_SUMMARY,
   CRYPTO_KEY,
   MODEM_NAME,
   MODEM_CHECK_NAME,
@@ -88,13 +88,14 @@ class PairingManager {
   std::string link_type;
   std::string machine_name = "unknown";
   std::string ip_prefix = "192.168.168";
-  std::string pairing_cc_ip = "192.168.168.10";
-  std::string air_unit_ip = "192.168.168.2";
+  std::string pairing_cc_ip = ip_prefix + ".10";
+  std::string air_unit_ip = ip_prefix + ".2";
   std::string pairing_port = "29351";
   std::string config_password = "12345678";
   std::string pairing_encryption_key = "";
   std::string pairing_network_id = "MH";
   std::string pairing_channel = default_pairing_channel;
+  std::string pairing_bandwidth = "";
   std::string zerotier_id = "";
   std::string ethernet_device = "eno1";
   std::string persistent_folder = "/data/";
@@ -113,11 +114,11 @@ class PairingManager {
   * @param[in]   bandwidth, each channel bandwidth [MHz]
   * @param[in]   power, transmission power
   **/
-  static void parse_buffer(std::string& cmd, ConfigMicrohardState& state, char* buffer, int n,
-                           const std::string& config_pwd, const std::string& modem_name,
-                           const std::string& new_modem_ip, const std::string& encryption_key,
-                           const std::string& network_id, const std::string& channel, const std::string& bandwidth,
-                           const std::string& power, bool check_name = false);
+  void parse_buffer(std::string& cmd, ConfigMicrohardState& state, char* buffer, int n,
+                    const std::string& config_pwd, const std::string& modem_name,
+                    const std::string& new_modem_ip, const std::string& encryption_key,
+                    const std::string& network_id, const std::string& channel, const std::string& bandwidth,
+                    const std::string& power, bool check_name = false);
 
   /**
   * @brief       parses the the microhard radio response to an AT command
@@ -156,6 +157,7 @@ class PairingManager {
   std::function<void(int)> _quit_callback;
   bool _get_status_initialized = false;
   int _fd;
+  std::string _system_summary;
 
   std::chrono::steady_clock::time_point _last_pairing_time_stamp;
 

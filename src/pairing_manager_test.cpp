@@ -66,17 +66,22 @@ TEST(pairing_manager_test, parse_buffer) {
   pairing_manager.parse_buffer(cmd, state, buffer2, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,
                                power);
   EXPECT_EQ(config_pwd + "\n", cmd);
-  EXPECT_EQ(ConfigMicrohardState::CRYPTO_KEY, state);
+  EXPECT_EQ(ConfigMicrohardState::SYSTEM_SUMMARY, state);
 
   char buffer3[] = "Entering\n";
   n = sizeof(buffer3) / sizeof(char);
   pairing_manager.parse_buffer(cmd, state, buffer3, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,
                                power);
-  EXPECT_EQ("AT+MWVENCRYPT=1," + encryption_key + "\n", cmd);
-  EXPECT_EQ(ConfigMicrohardState::MODEM_NAME, state);
+  EXPECT_EQ("AT+MSSYSI\n", cmd);
+  EXPECT_EQ(ConfigMicrohardState::CRYPTO_KEY, state);
 
   char buffer4[] = "OK\n";
   n = sizeof(buffer4) / sizeof(char);
+  pairing_manager.parse_buffer(cmd, state, buffer4, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,
+                               power);
+  EXPECT_EQ("AT+MWVENCRYPT=1," + encryption_key + "\n", cmd);
+  EXPECT_EQ(ConfigMicrohardState::MODEM_NAME, state);
+
   pairing_manager.parse_buffer(cmd, state, buffer4, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,
                                power);
   EXPECT_EQ("AT+MSMNAME=" + modem_name + "\n", cmd);
@@ -143,11 +148,18 @@ TEST(pairing_manager_test, parse_buffer_error) {
   pairing_manager.parse_buffer(cmd, state, buffer2, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,
                                power);
   EXPECT_EQ(config_pwd + "\n", cmd);
-  EXPECT_EQ(ConfigMicrohardState::CRYPTO_KEY, state);
+  EXPECT_EQ(ConfigMicrohardState::SYSTEM_SUMMARY, state);
 
   char buffer3[] = "Entering\n";
   n = sizeof(buffer3) / sizeof(char);
   pairing_manager.parse_buffer(cmd, state, buffer3, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,
+                               power);
+  EXPECT_EQ("AT+MSSYSI\n", cmd);
+  EXPECT_EQ(ConfigMicrohardState::CRYPTO_KEY, state);
+
+  char buffer4[] = "OK\n";
+  n = sizeof(buffer4) / sizeof(char);
+  pairing_manager.parse_buffer(cmd, state, buffer4, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,
                                power);
   EXPECT_EQ("AT+MWVENCRYPT=1," + encryption_key + "\n", cmd);
   EXPECT_EQ(ConfigMicrohardState::MODEM_NAME, state);

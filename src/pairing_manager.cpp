@@ -220,17 +220,17 @@ void PairingManager::parse_buffer(std::string& cmd, ConfigMicrohardState& state,
       std::cout << timestamp() << "Set Microhard channel: " << channel << std::endl;
       state = ConfigMicrohardState::BANDWIDTH;
     } else if (state == ConfigMicrohardState::BANDWIDTH && check_at_result(output)) {
-      std::string _bandwidth = bandwidth;
-      if (_bandwidth == "") {
+      std::string mh_model_bandwidth = bandwidth;
+      if (mh_model_bandwidth == "") {
         if (_system_summary.find("DDL1800") != std::string::npos) {
-          _bandwidth = "3";
+          mh_model_bandwidth = "3";
         } else {
-          _bandwidth = "1";
+          mh_model_bandwidth = "1";
         }
       }
-      cmd = "AT+MWBAND=" + _bandwidth + "\n";
+      cmd = "AT+MWBAND=" + mh_model_bandwidth + "\n";
       output = "";
-      std::cout << timestamp() << "Set Microhard bandwidth: " << bandwidth << std::endl;
+      std::cout << timestamp() << "Set Microhard bandwidth: " << mh_model_bandwidth << std::endl;
       state = ConfigMicrohardState::NETWORK_ID;
     } else if (state == ConfigMicrohardState::NETWORK_ID && check_at_result(output)) {
       cmd = "AT+MWNETWORKID=" + network_id + "\n";

@@ -67,6 +67,7 @@ enum class ConfigMicrohardState {
   DONE,
   GET_STATUS,
   READ_STATUS,
+  ENCRYPTION_TYPE,
   NONE
 };
 
@@ -136,6 +137,13 @@ class PairingManager {
   static bool check_at_result_modem_name(const std::string& output, const std::string& name);
 
   /**
+  * @brief       parses the the microhard radio response to an AT command for getting encryption type
+  * @param[in]   output, string containing the microhard response
+  * @returns     true if the name matches
+  **/
+  static bool check_at_result_encryption_type(const std::string& output, std::string& type);
+
+  /**
   * @brief       prints the microhard response to AT commands for debugging purposes
   * @param[in]   logbuf, string containing the microhard response
   **/
@@ -158,6 +166,7 @@ class PairingManager {
   bool _get_status_initialized = false;
   int _fd;
   std::string _system_summary;
+  std::string _encryption_type = "1";
 
   bool _config_timeout_running = false;
   std::mutex _config_timeout_mutex;

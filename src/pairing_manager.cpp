@@ -168,13 +168,17 @@ void PairingManager::parse_buffer(std::string& cmd, ConfigMicrohardState& state,
       cmd = config_pwd + "\n";
       output = "";
     } else if (state == ConfigMicrohardState::SYSTEM_SUMMARY && output.find("Entering") != std::string::npos) {
-      state = ConfigMicrohardState::CRYPTO_KEY;
+      state = ConfigMicrohardState::ENCRYPTION_TYPE;
       cmd = "AT+MSSYSI\n";
       output = "";
-    } else if (state == ConfigMicrohardState::CRYPTO_KEY && check_at_result(output)) {
+    } else if (state == ConfigMicrohardState::ENCRYPTION_TYPE && check_at_result(output)) {
       _system_summary = output;
+      state = ConfigMicrohardState::CRYPTO_KEY;
+      cmd = "AT+MWVENCRYPT\n";
+      output = "";
+    } else if (state == ConfigMicrohardState::CRYPTO_KEY && check_at_result_encryption_type(output, _encryption_type)) {
       if (!encryption_key.empty()) {
-        cmd = "AT+MWVENCRYPT=1," + encryption_key + "\n";
+        cmd = "AT+MWVENCRYPT=" + _encryption_type + "," + encryption_key + "\n";
       } else {
         cmd = "AT+MWVENCRYPT=0\n";
       }
@@ -442,6 +446,18 @@ bool PairingManager::check_at_result(const std::string& output) {
 //-----------------------------------------------------------------------------
 bool PairingManager::check_at_result_modem_name(const std::string& output, const std::string& name) {
   return (output.find("OK") != std::string::npos && output.find("Host name:" + name) != std::string::npos);
+}
+
+//-----------------------------------------------------------------------------
+bool PairingManager::check_at_result_encryption_type(const std::string& output, std::string& type) {
+  const std::string key = "Encryption Type: ";
+  std::size_t i = output.find(key);
+  bool res = output.find("OK") != std::string::npos;
+  if (res && i != std::string::npos) {
+    type = output.substr(i + key.length(), 1);
+  }
+
+  return res;
 }
 
 //-----------------------------------------------------------------------------

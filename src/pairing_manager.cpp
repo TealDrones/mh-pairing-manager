@@ -638,7 +638,7 @@ std::string PairingManager::pair_gcs_request(const std::string& req_body) {
   val["CMD"] = "pair";
   val["NM"] = machine_name;
 
-  _operation_mutex.lock();
+  std::lock_guard<std::mutex> guard(_operation_mutex);
   if (_pairing_mode &&
       create_gcs_pairing_json(req_body, cc_ip, mh_ip, connect_key, channel, bandwidth, network_id) &&
       cc_ip != "" && mh_ip != "" && connect_key != "" && channel != "" && network_id != "") {
@@ -658,7 +658,6 @@ std::string PairingManager::pair_gcs_request(const std::string& req_body) {
                           machine_name, cc_ip, mh_ip,
                           connect_key, network_id, channel,
                           bandwidth, default_transmit_power);
-      _operation_mutex.unlock();
     }).detach();
     val["IP"] = cc_ip;
     val["CC"] = channel;
@@ -833,7 +832,7 @@ bool PairingManager::disconnect_gcs(const std::string& req_body) {
 
 //-----------------------------------------------------------------------------
 std::string PairingManager::set_channel_request(const std::string& req_body) {
-  _operation_mutex.lock();
+  std::lock_guard<std::mutex> guard(_operation_mutex);
   std::cout << timestamp() << "Got set channel request: " << req_body << std::endl;
 
   Json::Value val;
@@ -860,7 +859,6 @@ bool PairingManager::set_channel(const std::string& req_body, Json::Value& val) 
 
   if (!set_channel(val["NID"].asString(), val["CC"].asString(), val["PW"].asString(), val["BW"].asString())) {
     std::cout << timestamp() << "Set channel failed!" << std::endl;
-    _operation_mutex.unlock();
     return false;
   }
 
@@ -922,12 +920,11 @@ bool PairingManager::set_channel(const std::string& new_network_id, const std::s
   // Change modem parameters after the response was sent
   std::thread([this, connect_key, mhip, new_network_id, new_ch, new_bandwidth, power]() {
     std::this_thread::sleep_for(100ms);
-    std::cout << "Setting channel: " << new_ch << " Power: " << power << " Network ID: " << new_network_id << std::endl;
+    std::cout << timestamp() << "Setting channel: " << new_ch << " Power: " << power << " Network ID: " << new_network_id << std::endl;
     configure_microhard(_pairing_val["MHIP"].asString(), _pairing_val["CP"].asString(),
                         machine_name, "", "",
                         connect_key, new_network_id,
                         new_ch, new_bandwidth, power);
-    _operation_mutex.unlock();
   }).detach();
 
   return true;

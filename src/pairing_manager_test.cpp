@@ -115,6 +115,10 @@ TEST(pairing_manager_test, parse_buffer) {
   pairing_manager.parse_buffer(cmd, state, buffer4, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,
                                power);
   EXPECT_EQ("AT&W\n", cmd);
+  EXPECT_EQ(ConfigMicrohardState::WRITE_FLASH, state);
+
+  pairing_manager.parse_buffer(cmd, state, buffer4, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,
+                               power);
   EXPECT_EQ(ConfigMicrohardState::DONE, state);
 }
 

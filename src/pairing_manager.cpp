@@ -575,7 +575,7 @@ bool PairingManager::create_gcs_pairing_json(const std::string& s,
   val["DevPublicKey"] = _rsa.get_public_key();
   val["DevPrivateKey"] = _rsa.get_private_key();
 
-  return write_json_gcs_file(val);
+  return write_json_gcs_file(get_json_gcs_filename(), val);
 }
 
 bool PairingManager::decrypt_string_to_json(const std::string& in, Json::Value& out) {
@@ -648,12 +648,11 @@ std::string PairingManager::pair_gcs_request(const std::string& req_body) {
 #endif
               << ", channel: " << channel << ", bandwidth: " << bandwidth << ", network id: " << network_id
               << std::endl;
-    std::lock_guard<std::mutex> guard(_pairing_mutex);
     _pairing_mode = false;
 
     // Change modem parameters after the response was sent
     std::thread([this, cc_ip, mh_ip, connect_key, network_id, channel, bandwidth]() {
-      std::this_thread::sleep_for(100ms);
+      std::this_thread::sleep_for(1000ms);
       configure_microhard(air_unit_ip, _pairing_val["CP"].asString(),
                           machine_name, cc_ip, mh_ip,
                           connect_key, network_id, channel,
@@ -733,12 +732,11 @@ bool PairingManager::unpair_gcs(const std::string& req_body) {
   remove_endpoint("gcs");
   remove(get_json_gcs_filename().c_str());
 
-  std::lock_guard<std::mutex> pairing_guard(_pairing_mutex);
   if (!_pairing_mode) {
     _pairing_val["EK"] = OpenSSL_Rand::random_string(random_aes_key_length);
     // Change modem parameters after the response was sent
     std::thread([this]() {
-      std::this_thread::sleep_for(100ms);
+      std::this_thread::sleep_for(1000ms);
       reconfigure_microhard();
     }).detach();
   }
@@ -776,7 +774,7 @@ bool PairingManager::connect_gcs(const std::string& req_body, std::string& chann
   std::cout << timestamp() << "Connection request verification succeeded. " << std::endl;
   print_json("Connect Json:", val);
 
-  if (!set_channel(val["NID"].asString(), val["CC"].asString(), val["PW"].asString(), val["BW"].asString())) {
+  if (!set_modem_parameters(val["NID"].asString(), val["CC"].asString(), val["PW"].asString(), val["BW"].asString())) {
     std::cout << timestamp() << "Set channel failed!" << std::endl;
     return false;
   }
@@ -820,7 +818,7 @@ bool PairingManager::disconnect_gcs(const std::string& req_body) {
   std::cout << timestamp() << "Disconnect request verification succeeded. " << std::endl;
   print_json("Disconnect Json:", val);
 
-  if (!set_channel(val["NID"].asString(), val["CC"].asString(), val["PW"].asString(), val["BW"].asString())) {
+  if (!set_modem_parameters(val["NID"].asString(), val["CC"].asString(), val["PW"].asString(), val["BW"].asString())) {
     std::cout << timestamp() << "Set channel failed!" << std::endl;
     return false;
   }
@@ -831,17 +829,44 @@ bool PairingManager::disconnect_gcs(const std::string& req_body) {
 }
 
 //-----------------------------------------------------------------------------
-std::string PairingManager::set_channel_request(const std::string& req_body) {
+std::string PairingManager::status_request() {
   std::lock_guard<std::mutex> guard(_operation_mutex);
-  std::cout << timestamp() << "Got set channel request: " << req_body << std::endl;
+  std::cout << timestamp() << "Got status request." << std::endl;
+  stop_modem_config_timeout();
+
+  Json::Value res_val;
+  res_val["CMD"] = "status";
+  res_val["NM"] = machine_name;
+  std::ifstream in(get_json_gcs_filename());
+  if (in) {
+    Json::Value val;
+    if (decrypt_string_to_json(std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()), val)) {
+      res_val["RES"] = "accepted";
+      res_val["NID"] = val["NID"];
+      res_val["CC"] = val["CC"];
+      res_val["PW"] = val["PW"];
+      res_val["BW"] = val["BW"];
+    }
+  } else {
+    res_val["RES"] = "rejected";
+  }
+
+  std::string message = pack_response(res_val);
+  return _gcs_rsa.encrypt(message + ";" + _rsa.sign(message));
+}
+
+//-----------------------------------------------------------------------------
+std::string PairingManager::set_modem_parameters_request(const std::string& req_body) {
+  std::lock_guard<std::mutex> guard(_operation_mutex);
+  std::cout << timestamp() << "Got set modem parameters request: " << req_body << std::endl;
 
   Json::Value val;
-  if (set_channel(req_body, val)) {
+  if (set_modem_parameters(req_body, val)) {
     val["RES"] = "accepted";
   } else {
     val["RES"] = "rejected";
   }
-  val["CMD"] = "channel";
+  val["CMD"] = "modemparameters";
   val["NM"] = machine_name;
   std::string message = pack_response(val);
 
@@ -849,28 +874,33 @@ std::string PairingManager::set_channel_request(const std::string& req_body) {
 }
 
 //-----------------------------------------------------------------------------
-bool PairingManager::set_channel(const std::string& req_body, Json::Value& val) {
+bool PairingManager::set_modem_parameters(const std::string& req_body, Json::Value& val) {
   if (!verify_request(req_body, val)) {
-    std::cout << timestamp() << "Set channel request verification failed" << std::endl;
+    std::cout << timestamp() << "Set modem parameters request verification failed" << std::endl;
     return false;
   }
-  std::cout << timestamp() << "Set channel verification succeeded. " << std::endl;
-  print_json("Set channel Json:", val);
+  std::cout << timestamp() << "Set modem parameters verification succeeded. " << std::endl;
+  print_json("Set modem parameters Json:", val);
 
-  if (!set_channel(val["NID"].asString(), val["CC"].asString(), val["PW"].asString(), val["BW"].asString())) {
-    std::cout << timestamp() << "Set channel failed!" << std::endl;
-    return false;
+  bool res = true;
+  if (!set_modem_parameters(val["NID"].asString(), val["CC"].asString(), val["PW"].asString(), val["BW"].asString())) {
+    std::cout << timestamp() << "Set modem parameters failed!" << std::endl;
+    res = false;
   }
+  start_modem_config_timeout();
 
-  return true;
+  return res;
 }
 
 //-----------------------------------------------------------------------------
 void PairingManager::print_json(const std::string& msg, const Json::Value& val) {
 #ifdef UNSECURE_DEBUG
-  std::cout << timestamp() << msg << std::endl;
+  Json::Value outval(val);
+  outval.removeMember("PublicKey");
+  outval.removeMember("DevPublicKey");
+  outval.removeMember("DevPrivateKey");
   Json::StreamWriterBuilder builder;
-  std::cout << timestamp() << Json::writeString(builder, val) << std::endl;
+  std::cout << timestamp() << msg << Json::writeString(builder, outval) << std::endl;
 #endif
 }
 
@@ -885,8 +915,8 @@ std::string PairingManager::from_json_to_string(const Json::Value& val) {
 }
 
 //-----------------------------------------------------------------------------
-bool PairingManager::set_channel(const std::string& new_network_id, const std::string& new_ch, const std::string& power,
-                                 const std::string& new_bandwidth) {
+bool PairingManager::set_modem_parameters(const std::string& new_network_id, const std::string& new_ch,
+                                          const std::string& power, const std::string& new_bandwidth) {
   try {
     int ch = std::stoi(new_ch);
     if (ch < 1 || ch > 81) {
@@ -907,46 +937,83 @@ bool PairingManager::set_channel(const std::string& new_network_id, const std::s
   if (!success) {
     return false;
   }
-  val["CC"] = new_ch;
-  val["PW"] = power;
-  val["NID"] = new_network_id;
-  std::string connect_key = val["EK"].asString();
-  std::string mhip = val["MHIP"].asString();
 
-  if (!write_json_gcs_file(val)) {
+  if (!write_json_gcs_file(get_prev_json_gcs_filename(), val, false)) {
     return false;
   }
 
-  // Change modem parameters after the response was sent
-  std::thread([this, connect_key, mhip, new_network_id, new_ch, new_bandwidth, power]() {
-    std::this_thread::sleep_for(100ms);
-    std::cout << timestamp() << "Setting channel: " << new_ch << " Power: " << power << " Network ID: " << new_network_id << std::endl;
-    configure_microhard(_pairing_val["MHIP"].asString(), _pairing_val["CP"].asString(),
-                        machine_name, "", "",
-                        connect_key, new_network_id,
-                        new_ch, new_bandwidth, power);
-  }).detach();
+  val["CC"] = new_ch;
+  val["PW"] = power;
+  val["NID"] = new_network_id;
+  val["BW"] = new_bandwidth;
+  std::string connect_key = val["EK"].asString();
+  std::string mhip = val["MHIP"].asString();
+
+  if (!write_json_gcs_file(get_json_gcs_filename(), val)) {
+    return false;
+  }
+
+  std::cout << timestamp() << "Setting channel: " << new_ch << " Power: " << power << " Network ID: " << new_network_id << std::endl;
+  configure_microhard(_pairing_val["MHIP"].asString(), _pairing_val["CP"].asString(),
+                      machine_name, "", "",
+                      connect_key, new_network_id,
+                      new_ch, new_bandwidth, power);
 
   return true;
 }
 
 //-----------------------------------------------------------------------------
-bool PairingManager::write_json_gcs_file(Json::Value& val) {
-  print_json("Write Json GCS file:", val);
+void PairingManager::start_modem_config_timeout() {
+  std::thread([&]() {
+    std::unique_lock<std::mutex> l(_config_timeout_mutex);
+    _config_timeout_running = true;
+    if (_config_timeout_cv.wait_for(l, 60s) == std::cv_status::timeout) {
+      _config_timeout_running = false;
+      std::cout << timestamp() << "Connection was not established. Reverting modem settings to previous state." << std::endl;
+      // revert modem settings
+      std::ifstream in(get_prev_json_gcs_filename());
+      if (in) {
+        Json::Value val;
+        bool success =
+          decrypt_string_to_json(std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()), val);
+        if (success) {
+          configure_microhard(_pairing_val["MHIP"].asString(), _pairing_val["CP"].asString(),
+                              machine_name, "", "",
+                              val["EK"].asString(), val["NID"].asString(),
+                              val["CC"].asString(), val["BW"].asString(), val["PW"].asString());
+        }
+      }
+    }
+  }).detach();
+}
+
+//-----------------------------------------------------------------------------
+void PairingManager::stop_modem_config_timeout() {
+  if (_config_timeout_running) {
+    _config_timeout_running = false;
+    _config_timeout_cv.notify_one();
+  }
+}
+
+//-----------------------------------------------------------------------------
+bool PairingManager::write_json_gcs_file(std::string filename, Json::Value& val, bool print) {
+  if (print) {
+    print_json("Write Json GCS file " + filename + ":", val);
+  }
 
   std::string s = from_json_to_string(val);
   std::string modified_s = _aes.encrypt(s);
   std::string json_gcs_filename = get_json_gcs_filename();
-  std::ofstream out(json_gcs_filename);
+  std::ofstream out(filename);
   if (!out) {
-    std::cout << timestamp() << "Failed to open " << json_gcs_filename << " for writing" << std::endl;
+    std::cout << timestamp() << "Failed to open " << filename << " for writing" << std::endl;
     return false;
   }
   out << modified_s;
 
   bool res = true;
   if (out.bad()) {
-    std::cout << timestamp() << "Failed to write to file " << json_gcs_filename << std::endl;
+    std::cout << timestamp() << "Failed to write to file " << filename << std::endl;
     res = false;
   }
   out.close();
@@ -956,16 +1023,15 @@ bool PairingManager::write_json_gcs_file(Json::Value& val) {
 
 //-----------------------------------------------------------------------------
 bool PairingManager::handle_pairing_command() {
+  std::lock_guard<std::mutex> guard(_operation_mutex);
   std::cout << timestamp() << "Got pairing command" << std::endl;
   bool result = false;
-  _pairing_mutex.lock();
   auto now = std::chrono::steady_clock::now();
 
   if (!_pairing_mode ||
       std::chrono::duration_cast<std::chrono::milliseconds>(now - _last_pairing_time_stamp).count() > 5000) {
     _pairing_mode = true;
     _last_pairing_time_stamp = now;
-    _pairing_mutex.unlock();
     if (_pairing_val["LT"] == "MH") {
       std::lock_guard<std::mutex> udp_guard(_udp_mutex);
       _ip = "";
@@ -979,15 +1045,20 @@ bool PairingManager::handle_pairing_command() {
       }).detach();
       result = true;
     }
-  } else {
-    _pairing_mutex.unlock();
   }
 
   return result;
 }
 
 //-----------------------------------------------------------------------------
-std::string PairingManager::get_json_gcs_filename() { return persistent_folder + json_gcs_filename; };
+std::string PairingManager::get_json_gcs_filename() { 
+  return persistent_folder + json_gcs_filename;
+};
+
+//-----------------------------------------------------------------------------
+std::string PairingManager::get_prev_json_gcs_filename() { 
+  return persistent_folder + json_gcs_filename + ".prev";
+};
 
 //-----------------------------------------------------------------------------
 bool PairingManager::get_microhard_modem_status()

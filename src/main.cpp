@@ -69,12 +69,12 @@ int main(int argc, char* argv[]) {
   std::cout << timestamp() << "Starting pairing manager" << std::endl;
 
   served::multiplexer mux;
-  mux.handle("/status").get([](served::response& res, const served::request&) {
-    std::cout << timestamp() << "Got status request." << std::endl;
-    res << "Running";
+  mux.handle("/status").post([&](served::response& res, const served::request&) {
+    res << pairing_manager.status_request();
   });
-  mux.handle("/pair").post(
-      [&](served::response& res, const served::request& req) { res << pairing_manager.pair_gcs_request(req.body()); });
+  mux.handle("/pair").post([&](served::response& res, const served::request& req) { 
+    res << pairing_manager.pair_gcs_request(req.body());
+  });
   mux.handle("/unpair").post([&](served::response& res, const served::request& req) {
     res << pairing_manager.unpair_gcs_request(req.body());
   });
@@ -84,8 +84,8 @@ int main(int argc, char* argv[]) {
   mux.handle("/disconnect").post([&](served::response& res, const served::request& req) {
     res << pairing_manager.disconnect_gcs_request(req.body());
   });
-  mux.handle("/channel").post([&](served::response& res, const served::request& req) {
-    res << pairing_manager.set_channel_request(req.body());
+  mux.handle("/modemparameters").post([&](served::response& res, const served::request& req) {
+    res << pairing_manager.set_modem_parameters_request(req.body());
   });
 #ifdef UNSECURE_DEBUG
   // Used for debugging if pairing button on PX4 is not available

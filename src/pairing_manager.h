@@ -80,7 +80,8 @@ class PairingManager {
   std::string unpair_gcs_request(const std::string& req_body);
   std::string connect_gcs_request(const std::string& req_body);
   std::string disconnect_gcs_request(const std::string& req_body);
-  std::string set_channel_request(const std::string& req_body);
+  std::string set_modem_parameters_request(const std::string& req_body);
+  std::string status_request();
   bool handle_pairing_command();
   void set_RSSI_report_callback(std::function<void(int)> report_callback);
 
@@ -145,7 +146,6 @@ class PairingManager {
   OpenSSL_RSA _rsa;
   OpenSSL_RSA _gcs_rsa;
   Json::Value _pairing_val;
-  std::mutex _pairing_mutex;
   bool _pairing_mode = false;
   std::string _ip = "";
   std::string _port = "";
@@ -158,6 +158,10 @@ class PairingManager {
   bool _get_status_initialized = false;
   int _fd;
   std::string _system_summary;
+
+  bool _config_timeout_running = false;
+  std::mutex _config_timeout_mutex;
+  std::condition_variable _config_timeout_cv;
 
   std::chrono::steady_clock::time_point _last_pairing_time_stamp;
 
@@ -213,13 +217,14 @@ class PairingManager {
   * @reurns      true, if the connection succeeded
   **/
   bool is_socket_connected(const int& sock, const std::string& air_ip);
-  bool set_channel(const std::string& req_body, Json::Value& val);
-  bool set_channel(const std::string& new_network_id, const std::string& new_ch, const std::string& power,
-                   const std::string& new_bandwidth);
-  bool write_json_gcs_file(Json::Value& val);
+  bool set_modem_parameters(const std::string& req_body, Json::Value& val);
+  bool set_modem_parameters(const std::string& new_network_id, const std::string& new_ch, const std::string& power,
+                            const std::string& new_bandwidth);
+  bool write_json_gcs_file(std::string filename, Json::Value& val, bool print = true);
   bool verify_request(const std::string& req_body, Json::Value& val);
   std::string pack_response(Json::Value& response);
   std::string get_json_gcs_filename();
+  std::string get_prev_json_gcs_filename();
   /**
   * @brief      converts from json to string
   * @param[in]  val, json data stucture
@@ -238,6 +243,9 @@ class PairingManager {
   * @param[in]  output, what modem returns when asked for status
   **/
   void parse_microhard_modem_status(std::string output);
+
+  void start_modem_config_timeout();
+  void stop_modem_config_timeout();
 
   void quit();
 };

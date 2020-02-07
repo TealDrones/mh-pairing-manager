@@ -31,7 +31,7 @@
 #
 ############################################################################
 
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.8)
 project(pairing-manager)
 option(SERVED_BUILD_SHARED "" OFF)
 option(SERVED_BUILD_STATIC "" ON)

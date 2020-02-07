@@ -203,9 +203,10 @@ void PairingManager::parse_buffer(std::string& cmd, ConfigMicrohardState& state,
       state = ConfigMicrohardState::MODEM_IP;
     } else if (state == ConfigMicrohardState::MODEM_IP && check_at_result(output)) {
       if (!new_modem_ip.empty()) {
-        cmd = "AT+MNLAN=lan,EDIT,0," + new_modem_ip + "," + modem_netmask + "\n";
-        output = "";
-        std::cout << timestamp() << "Set Microhard IP: " << new_modem_ip << std::endl;
+        // cmd = "AT+MNLAN=lan,EDIT,0," + new_modem_ip + "," + modem_netmask + "\n";
+        // output = "";
+        // std::cout << timestamp() << "Set Microhard IP: " << new_modem_ip << std::endl;
+        skip = true;
       } else {
         skip = true;
       }
@@ -238,6 +239,7 @@ void PairingManager::parse_buffer(std::string& cmd, ConfigMicrohardState& state,
       std::cout << timestamp() << "Set Microhard network Id: " << network_id << std::endl;
       state = ConfigMicrohardState::SAVE;
     } else if (state == ConfigMicrohardState::SAVE && check_at_result(output)) {
+      std::cout << timestamp() << "Saving configuration: AT&W" << std::endl;
       cmd = std::string("AT&W\n");
       state = ConfigMicrohardState::DONE;
     }
@@ -267,7 +269,6 @@ bool PairingManager::is_socket_connected(const int& sock, const std::string& air
       }
     }
   }
-
   return false;
 }
 
@@ -282,10 +283,14 @@ void PairingManager::configure_microhard_network_interface(const std::string& ip
 
   if (current_ip != ip) {
     std::cout << timestamp() << "Configure microhard network interface " << ethernet_device << " " << current_ip << std::endl;
-    std::string cmd = "ifconfig " + ethernet_device + " down;";
-    cmd += "ifconfig " + ethernet_device + " " + ip + " up";
+    std::string cmd = "NOT ifconfig " + ethernet_device + " down";
+    // system(cmd.c_str());
     std::cout << cmd << std::endl;
-    exec(cmd.c_str());
+    cmd = "NOT ifconfig " + ethernet_device + " " + ip + " up";
+    // system(cmd.c_str());
+    cmd = "systemctl restart systemd-networkd";
+    // system(cmd.c_str());
+    std::cout << cmd << std::endl;
     _pairing_val["CCIP"] = ip;
   }
 }

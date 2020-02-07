@@ -36,7 +36,7 @@
 #include <unistd.h>
 
 void help_argv_description(const char* pgm) {
-  std::cout << pgm
+  std::cout << pgm << " ver: " << TEAL_VERSION 
             << " [OPTIONS...]\n\n"
                "  -n --machine-name      Machine name. Default: BALENA_DEVICE_NAME_AT_INIT or gethostname.\n"
                "  -m --mavlink-port      MavLink port on which we listen for MAV_CMD_START_RX_PAIR. Default: 14531\n"

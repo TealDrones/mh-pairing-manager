@@ -214,11 +214,6 @@ void PairingManager::parse_buffer(std::string& cmd, ConfigMicrohardState& state,
     } else if (state == ConfigMicrohardState::POWER && check_at_result(output)) {
       cmd = "AT+MWTXPOWER=" + power + "\n";
       output = "";
-      state = ConfigMicrohardState::FREQUENCY;
-    } else if (state == ConfigMicrohardState::FREQUENCY && check_at_result(output)) {
-      cmd = "AT+MWFREQ=" + channel + "\n";
-      output = "";
-      std::cout << timestamp() << "Set Microhard channel: " << channel << std::endl;
       state = ConfigMicrohardState::BANDWIDTH;
     } else if (state == ConfigMicrohardState::BANDWIDTH && check_at_result(output)) {
       std::string mh_model_bandwidth = bandwidth;
@@ -232,6 +227,11 @@ void PairingManager::parse_buffer(std::string& cmd, ConfigMicrohardState& state,
       cmd = "AT+MWBAND=" + mh_model_bandwidth + "\n";
       output = "";
       std::cout << timestamp() << "Set Microhard bandwidth: " << mh_model_bandwidth << std::endl;
+      state = ConfigMicrohardState::FREQUENCY;
+    } else if (state == ConfigMicrohardState::FREQUENCY && check_at_result(output)) {
+      cmd = "AT+MWFREQ=" + channel + "\n";
+      output = "";
+      std::cout << timestamp() << "Set Microhard channel: " << channel << std::endl;
       state = ConfigMicrohardState::NETWORK_ID;
     } else if (state == ConfigMicrohardState::NETWORK_ID && check_at_result(output)) {
       cmd = "AT+MWNETWORKID=" + network_id + "\n";

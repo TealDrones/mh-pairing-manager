@@ -40,7 +40,7 @@ TEST(pairing_manager_test, parse_buffer) {
   PairingManager pairing_manager;
   pairing_manager.link_type = "MH";
   pairing_manager.config_password = "auterionfct";
-  pairing_manager.persistent_folder = "/home/martina/";
+  pairing_manager.persistent_folder = "/tmp";
 
   std::string cmd;
   ConfigMicrohardState state = ConfigMicrohardState::LOGIN;
@@ -73,10 +73,15 @@ TEST(pairing_manager_test, parse_buffer) {
   pairing_manager.parse_buffer(cmd, state, buffer3, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,
                                power);
   EXPECT_EQ("AT+MSSYSI\n", cmd);
-  EXPECT_EQ(ConfigMicrohardState::CRYPTO_KEY, state);
+  EXPECT_EQ(ConfigMicrohardState::ENCRYPTION_TYPE, state);
 
   char buffer4[] = "OK\n";
   n = sizeof(buffer4) / sizeof(char);
+  pairing_manager.parse_buffer(cmd, state, buffer4, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,
+                               power);
+  EXPECT_EQ("AT+MWVENCRYPT\n", cmd);
+  EXPECT_EQ(ConfigMicrohardState::CRYPTO_KEY, state);
+
   pairing_manager.parse_buffer(cmd, state, buffer4, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,
                                power);
   EXPECT_EQ("AT+MWVENCRYPT=1," + encryption_key + "\n", cmd);
@@ -115,6 +120,10 @@ TEST(pairing_manager_test, parse_buffer) {
   pairing_manager.parse_buffer(cmd, state, buffer4, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,
                                power);
   EXPECT_EQ("AT&W\n", cmd);
+  EXPECT_EQ(ConfigMicrohardState::WRITE_FLASH, state);
+
+  pairing_manager.parse_buffer(cmd, state, buffer4, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,
+                               power);
   EXPECT_EQ(ConfigMicrohardState::DONE, state);
 }
 
@@ -122,7 +131,7 @@ TEST(pairing_manager_test, parse_buffer_error) {
   PairingManager pairing_manager;
   pairing_manager.link_type = "MH";
   pairing_manager.config_password = "auterionfct";
-  pairing_manager.persistent_folder = "/home/martina/";
+  pairing_manager.persistent_folder = "/tmp";
 
   std::string cmd;
   ConfigMicrohardState state = ConfigMicrohardState::LOGIN;
@@ -155,9 +164,15 @@ TEST(pairing_manager_test, parse_buffer_error) {
   pairing_manager.parse_buffer(cmd, state, buffer3, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,
                                power);
   EXPECT_EQ("AT+MSSYSI\n", cmd);
-  EXPECT_EQ(ConfigMicrohardState::CRYPTO_KEY, state);
+  EXPECT_EQ(ConfigMicrohardState::ENCRYPTION_TYPE, state);
 
   char buffer4[] = "OK\n";
+  n = sizeof(buffer4) / sizeof(char);
+  pairing_manager.parse_buffer(cmd, state, buffer4, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,
+                               power);
+  EXPECT_EQ("AT+MWVENCRYPT\n", cmd);
+  EXPECT_EQ(ConfigMicrohardState::CRYPTO_KEY, state);
+
   n = sizeof(buffer4) / sizeof(char);
   pairing_manager.parse_buffer(cmd, state, buffer4, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,
                                power);

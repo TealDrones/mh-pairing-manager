@@ -108,7 +108,7 @@ void MAVLinkHandler::send_cmd_ack(uint8_t target_sysid, uint8_t target_compid, u
 void MAVLinkHandler::send_radio_status(uint8_t rssi) {
   if (_hasSysID) {
     mavlink_message_t msg;
-    mavlink_msg_radio_status_pack_chan(_sysID, _compID, MAVLINK_COMM_1, &msg, 0, rssi, 0, 0, 0, 0, 0);
+    mavlink_msg_radio_status_pack_chan(_sysID, _compID, MAVLINK_COMM_1, &msg, 0, rssi, 100, 0, 0, 0, 0);
     send_mavlink_message(&msg);
   }
 }

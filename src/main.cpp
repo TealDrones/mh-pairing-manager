@@ -61,7 +61,6 @@ int main(int argc, char* argv[]) {
   check_env_variables(pairing_manager);
   parse_argv(argc, argv, pairing_manager);
 
-  pairing_manager.set_quit_callback(quit_handler);
   if (!pairing_manager.init()) {
     std::cout << timestamp() << "Could not initialize pairing manager" << std::endl;
     return -1;
@@ -70,12 +69,12 @@ int main(int argc, char* argv[]) {
   std::cout << timestamp() << "Starting pairing manager" << std::endl;
 
   served::multiplexer mux;
-  mux.handle("/status").get([](served::response& res, const served::request&) {
-    std::cout << timestamp() << "Got status request." << std::endl;
-    res << "Running";
+  mux.handle("/status").post([&](served::response& res, const served::request&) {
+    res << pairing_manager.status_request();
   });
-  mux.handle("/pair").post(
-      [&](served::response& res, const served::request& req) { res << pairing_manager.pair_gcs_request(req.body()); });
+  mux.handle("/pair").post([&](served::response& res, const served::request& req) { 
+    res << pairing_manager.pair_gcs_request(req.body());
+  });
   mux.handle("/unpair").post([&](served::response& res, const served::request& req) {
     res << pairing_manager.unpair_gcs_request(req.body());
   });
@@ -85,8 +84,8 @@ int main(int argc, char* argv[]) {
   mux.handle("/disconnect").post([&](served::response& res, const served::request& req) {
     res << pairing_manager.disconnect_gcs_request(req.body());
   });
-  mux.handle("/channel").post([&](served::response& res, const served::request& req) {
-    res << pairing_manager.set_channel_request(req.body());
+  mux.handle("/modemparameters").post([&](served::response& res, const served::request& req) {
+    res << pairing_manager.set_modem_parameters_request(req.body());
   });
 #ifdef UNSECURE_DEBUG
   // Used for debugging if pairing button on PX4 is not available
@@ -99,7 +98,7 @@ int main(int argc, char* argv[]) {
   server.run(3, false);
 
   //-- Start MAVLink handler
-  mav_handler.init(pairing_manager.mavlink_udp_port, 198,
+  mav_handler.init(pairing_manager.mavlink_udp_port, MAV_COMP_ID_PAIRING_MANAGER,
     [&](mavlink_message_t* msg, struct sockaddr* srcaddr) {
     switch (msg->msgid) {
       case MAVLINK_MSG_ID_COMMAND_LONG: {
@@ -132,6 +131,9 @@ int main(int argc, char* argv[]) {
   cv.wait(lk);
 
   server.stop();
+
+  exit(0);
+
   return 0;
 }
 

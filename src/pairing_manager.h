@@ -63,9 +63,11 @@ enum class ConfigMicrohardState {
   BANDWIDTH,
   NETWORK_ID,
   SAVE,
+  WRITE_FLASH,
   DONE,
   GET_STATUS,
   READ_STATUS,
+  ENCRYPTION_TYPE,
   NONE
 };
 
@@ -79,10 +81,10 @@ class PairingManager {
   std::string unpair_gcs_request(const std::string& req_body);
   std::string connect_gcs_request(const std::string& req_body);
   std::string disconnect_gcs_request(const std::string& req_body);
-  std::string set_channel_request(const std::string& req_body);
+  std::string set_modem_parameters_request(const std::string& req_body);
+  std::string status_request();
   bool handle_pairing_command();
   void set_RSSI_report_callback(std::function<void(int)> report_callback);
-  void set_quit_callback(std::function<void(int)> quit_callback);
 
   // Parameters
   std::string link_type;
@@ -135,6 +137,13 @@ class PairingManager {
   static bool check_at_result_modem_name(const std::string& output, const std::string& name);
 
   /**
+  * @brief       parses the the microhard radio response to an AT command for getting encryption type
+  * @param[in]   output, string containing the microhard response
+  * @returns     true if the name matches
+  **/
+  static bool check_at_result_encryption_type(const std::string& output, std::string& type);
+
+  /**
   * @brief       prints the microhard response to AT commands for debugging purposes
   * @param[in]   logbuf, string containing the microhard response
   **/
@@ -145,19 +154,23 @@ class PairingManager {
   OpenSSL_RSA _rsa;
   OpenSSL_RSA _gcs_rsa;
   Json::Value _pairing_val;
-  std::mutex _pairing_mutex;
   bool _pairing_mode = false;
   std::string _ip = "";
   std::string _port = "";
   std::mutex _udp_mutex;
   std::mutex _mh_mutex;
   std::mutex _quit_mutex;
+  std::mutex _operation_mutex;
   std::condition_variable _quit_cv;
   std::function<void(int)> _rssi_report_callback;
-  std::function<void(int)> _quit_callback;
   bool _get_status_initialized = false;
   int _fd;
   std::string _system_summary;
+  std::string _encryption_type = "1";
+
+  bool _config_timeout_running = false;
+  std::mutex _config_timeout_mutex;
+  std::condition_variable _config_timeout_cv;
 
   std::chrono::steady_clock::time_point _last_pairing_time_stamp;
 
@@ -213,13 +226,14 @@ class PairingManager {
   * @reurns      true, if the connection succeeded
   **/
   bool is_socket_connected(const int& sock, const std::string& air_ip);
-  bool set_channel(const std::string& req_body, Json::Value& val);
-  bool set_channel(const std::string& new_network_id, const std::string& new_ch, const std::string& power,
-                   const std::string& new_bandwidth);
-  bool write_json_gcs_file(Json::Value& val);
+  bool set_modem_parameters(const std::string& req_body, Json::Value& val);
+  bool set_modem_parameters(const std::string& new_network_id, const std::string& new_ch, const std::string& power,
+                            const std::string& new_bandwidth);
+  bool write_json_gcs_file(std::string filename, Json::Value& val, bool print = true);
   bool verify_request(const std::string& req_body, Json::Value& val);
   std::string pack_response(Json::Value& response);
   std::string get_json_gcs_filename();
+  std::string get_prev_json_gcs_filename();
   /**
   * @brief      converts from json to string
   * @param[in]  val, json data stucture
@@ -238,6 +252,9 @@ class PairingManager {
   * @param[in]  output, what modem returns when asked for status
   **/
   void parse_microhard_modem_status(std::string output);
+
+  void start_modem_config_timeout();
+  void stop_modem_config_timeout();
 
   void quit();
 };

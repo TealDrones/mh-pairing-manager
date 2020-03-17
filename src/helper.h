@@ -33,7 +33,7 @@
 
 #pragma once
 
-#define TEAL_VERSION "0.0.4"
+#define TEAL_VERSION "0.0.05"
 
 #include <getopt.h>
 #include <iostream>

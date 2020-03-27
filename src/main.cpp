@@ -55,7 +55,7 @@ void quit_handler(int /*sig*/) {
 
 //-----------------------------------------------------------------------------
 int main(int argc, char* argv[]) {
-  std::cout << "Teal Version:"<< TEAL_VERSION << std::endl;
+  std::cout << "Teal Version: "<< TEAL_VERSION << std::endl;
   PairingManager pairing_manager;
   MAVLinkHandler mav_handler;
 

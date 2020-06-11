@@ -100,16 +100,16 @@ TEST(pairing_manager_test, parse_buffer) {
   pairing_manager.parse_buffer(cmd, state, buffer4, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,
                                power);
   EXPECT_EQ("AT+MWTXPOWER=" + power + "\n", cmd);
-  EXPECT_EQ(ConfigMicrohardState::FREQUENCY, state);
-
-  pairing_manager.parse_buffer(cmd, state, buffer4, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,
-                               power);
-  EXPECT_EQ("AT+MWFREQ=" + channel + "\n", cmd);
   EXPECT_EQ(ConfigMicrohardState::BANDWIDTH, state);
 
   pairing_manager.parse_buffer(cmd, state, buffer4, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,
                                power);
   EXPECT_EQ("AT+MWBAND=" + bandwidth + "\n", cmd);
+  EXPECT_EQ(ConfigMicrohardState::FREQUENCY, state);
+
+  pairing_manager.parse_buffer(cmd, state, buffer4, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,
+                               power);
+  EXPECT_EQ("AT+MWFREQ=" + channel + "\n", cmd);
   EXPECT_EQ(ConfigMicrohardState::NETWORK_ID, state);
 
   pairing_manager.parse_buffer(cmd, state, buffer4, n, config_pwd, modem_name, new_modem_ip, encryption_key, network_id, channel, bandwidth,

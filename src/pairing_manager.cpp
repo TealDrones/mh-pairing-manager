@@ -216,6 +216,14 @@ void PairingManager::parse_buffer(std::string& cmd, ConfigMicrohardState& state,
     } else if (state == ConfigMicrohardState::POWER && check_at_result(output)) {
       cmd = "AT+MWTXPOWER=" + power + "\n";
       output = "";
+      if (_system_summary.find("DDL1800") != std::string::npos) {
+        state = ConfigMicrohardState::DEFAULT_FREQUENCY;
+      } else {
+        state = ConfigMicrohardState::BANDWIDTH;
+      }
+    } else if (state == ConfigMicrohardState::DEFAULT_FREQUENCY && check_at_result(output)) {
+      cmd = "AT+MWFREQ=15\n";
+      output = "";
       state = ConfigMicrohardState::BANDWIDTH;
     } else if (state == ConfigMicrohardState::BANDWIDTH && check_at_result(output)) {
       std::string mh_model_bandwidth = bandwidth;

@@ -59,6 +59,7 @@ enum class ConfigMicrohardState {
   MODEM_CHECK_NAME,
   MODEM_IP,
   POWER,
+  DEFAULT_FREQUENCY,
   FREQUENCY,
   BANDWIDTH,
   NETWORK_ID,

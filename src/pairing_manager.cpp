@@ -216,6 +216,15 @@ void PairingManager::parse_buffer(std::string& cmd, ConfigMicrohardState& state,
     } else if (state == ConfigMicrohardState::POWER && check_at_result(output)) {
       cmd = "AT+MWTXPOWER=" + power + "\n";
       output = "";
+      state = ConfigMicrohardState::DISTANCE;
+    } else if (state == ConfigMicrohardState::DISTANCE && check_at_result(output)) {
+      if(std::stoi(power) == 30)
+        cmd = "AT+MWDISTANCE=4000\n";
+      else if (std::stoi(power) >= 20)
+        cmd = "AT+MWDISTANCE=1000\n";
+      else
+        cmd = "AT+MWDISTANCE=500\n";
+      output = "";
       if (_system_summary.find("DDL1800") != std::string::npos) {
         state = ConfigMicrohardState::DEFAULT_FREQUENCY;
       } else {
@@ -239,7 +248,11 @@ void PairingManager::parse_buffer(std::string& cmd, ConfigMicrohardState& state,
       std::cout << timestamp() << "Set Microhard bandwidth: " << mh_model_bandwidth << std::endl;
       state = ConfigMicrohardState::FREQUENCY;
     } else if (state == ConfigMicrohardState::FREQUENCY && check_at_result(output)) {
-      cmd = "AT+MWFREQ=" + channel + "\n";
+      if (_system_summary.find("DDL1800") != std::string::npos) {
+        cmd = "AT+MWFREQ=" + channel + "\n";
+      } else {
+        cmd = "AT+MWFREQ2400=" + channel + "\n";
+      }
       output = "";
       std::cout << timestamp() << "Set Microhard channel: " << channel << std::endl;
       state = ConfigMicrohardState::NETWORK_ID;
@@ -543,7 +556,9 @@ void PairingManager::create_pairing_val_for_microhard(Json::Value& val) {
   }
 
   if (error) {
-    val["EK"] = OpenSSL_Rand::random_string(random_aes_key_length);
+    // always default to the pairing encryption key so the drone is ready to go.
+    //val["EK"] = OpenSSL_Rand::random_string(random_aes_key_length);
+    val["EK"] = pairing_encryption_key;
     val["CC"] = pairing_channel;
     val["NID"] = pairing_network_id;
     val["PW"] = default_transmit_power;
@@ -758,7 +773,9 @@ bool PairingManager::unpair_gcs(const std::string& req_body) {
   remove(get_json_gcs_filename().c_str());
 
   if (!_pairing_mode) {
-    _pairing_val["EK"] = OpenSSL_Rand::random_string(random_aes_key_length);
+    // always default to the pairing encryption_key so the drone is ready to go.
+    //_pairing_val["EK"] = OpenSSL_Rand::random_string(random_aes_key_length);
+    _pairing_val["EK"] = pairing_encryption_key;
     // Change modem parameters after the response was sent
     std::thread([this]() {
       std::this_thread::sleep_for(1000ms);

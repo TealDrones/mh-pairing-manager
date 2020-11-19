@@ -1058,8 +1058,11 @@ bool PairingManager::write_json_gcs_file(std::string filename, Json::Value& val,
     std::cout << timestamp() << "Failed to write to file " << filename << std::endl;
     res = false;
   }
+  out.flush();
   out.close();
 
+  sync();
+  
   return res;
 }
 
